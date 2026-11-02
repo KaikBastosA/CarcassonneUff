@@ -28,11 +28,17 @@ export type Rotation = (typeof rotations)[number]
 export type Port = (typeof ports)[number]
 export type Terrain = 'city' | 'road' | 'field' | 'monastery'
 
+export interface RegionPoint {
+  readonly x: number
+  readonly y: number
+}
+
 export interface TileRegion {
   readonly id: string
   readonly terrain: Terrain
   readonly ports: readonly Port[]
   readonly shields: number
+  readonly anchor: RegionPoint
   readonly adjacentCities: readonly string[]
 }
 
@@ -44,106 +50,107 @@ export interface TileDefinition {
   readonly regions: readonly TileRegion[]
 }
 
-function region(id: string, terrain: Terrain, connections: readonly Port[], adjacentCities: readonly string[] = []): TileRegion {
-  return { id, terrain, ports: connections, shields: 0, adjacentCities }
+function region(id: string, terrain: Terrain, connections: readonly Port[], adjacentCities: readonly string[], anchor: RegionPoint): TileRegion {
+  return { id, terrain, ports: connections, shields: 0, adjacentCities, anchor }
 }
 
 export const tileCatalog: Readonly<Record<TileKind, TileDefinition>> = {
   city: {
     name: 'Cidade', source: 'CastleWall', imageRotations: 4, quantity: 14,
     regions: [
-      region('city', 'city', ['north-west', 'north', 'north-east']),
-      region('field', 'field', ports.slice(3), ['city']),
+      region('city', 'city', ['north-west', 'north', 'north-east'], [], { x: 0.5, y: 0.16 }),
+      region('field', 'field', ports.slice(3), ['city'], { x: 0.5, y: 0.65 }),
     ],
   },
   'city-corner': {
     name: 'Cidade em curva', source: 'CastleEdge', imageRotations: 4, quantity: 8,
     regions: [
-      region('city', 'city', ports.slice(0, 6)),
-      region('field', 'field', ports.slice(6), ['city']),
+      region('city', 'city', ports.slice(0, 6), [], { x: 0.72, y: 0.24 }),
+      region('field', 'field', ports.slice(6), ['city'], { x: 0.25, y: 0.75 }),
     ],
   },
   'city-sides': {
     name: 'Cidade dupla', source: 'CastleSides', imageRotations: 2, quantity: 4,
     regions: [
-      region('city-north', 'city', ports.slice(0, 3)),
-      region('city-south', 'city', ports.slice(6, 9)),
-      region('field', 'field', [...ports.slice(3, 6), ...ports.slice(9)], ['city-north', 'city-south']),
+      region('city-north', 'city', ports.slice(0, 3), [], { x: 0.5, y: 0.16 }),
+      region('city-south', 'city', ports.slice(6, 9), [], { x: 0.5, y: 0.84 }),
+      region('field', 'field', [...ports.slice(3, 6), ...ports.slice(9)], ['city-north', 'city-south'], { x: 0.5, y: 0.5 }),
     ],
   },
   'city-center': {
     name: 'Cidade fechada', source: 'CastleCenter', imageRotations: 1, quantity: 1,
-    regions: [region('city', 'city', ports)],
+    regions: [region('city', 'city', ports, [], { x: 0.5, y: 0.5 })],
   },
   'city-road': {
     name: 'Cidade e estrada', source: 'CastleWallRoad', imageRotations: 4, quantity: 8,
     regions: [
-      region('city', 'city', ports.slice(0, 3)),
-      region('road', 'road', ['east', 'west']),
-      region('field-north', 'field', ['east-north', 'west-north'], ['city']),
-      region('field-south', 'field', ['east-south', 'south-east', 'south', 'south-west', 'west-south']),
+      region('city', 'city', ports.slice(0, 3), [], { x: 0.5, y: 0.16 }),
+      region('road', 'road', ['east', 'west'], [], { x: 0.5, y: 0.53 }),
+      region('field-north', 'field', ['east-north', 'west-north'], ['city'], { x: 0.2, y: 0.37 }),
+      region('field-south', 'field', ['east-south', 'south-east', 'south', 'south-west', 'west-south'], [], { x: 0.5, y: 0.82 }),
     ],
   },
   road: {
     name: 'Estrada', source: 'Road', imageRotations: 4, quantity: 12,
     regions: [
-      region('road', 'road', ['north', 'south']),
-      region('field-east', 'field', ['north-east', 'east-north', 'east', 'east-south', 'south-east']),
-      region('field-west', 'field', ['south-west', 'west-south', 'west', 'west-north', 'north-west']),
+      region('road', 'road', ['north', 'south'], [], { x: 0.5, y: 0.5 }),
+      region('field-east', 'field', ['north-east', 'east-north', 'east', 'east-south', 'south-east'], [], { x: 0.8, y: 0.5 }),
+      region('field-west', 'field', ['south-west', 'west-south', 'west', 'west-north', 'north-west'], [], { x: 0.2, y: 0.5 }),
     ],
   },
   curve: {
     name: 'Curva', source: 'RoadCurve', imageRotations: 4, quantity: 11,
     regions: [
-      region('road', 'road', ['south', 'west']),
-      region('field-inner', 'field', ['south-west', 'west-south']),
-      region('field-outer', 'field', [...ports.slice(0, 7), 'west-north']),
+      region('road', 'road', ['south', 'west'], [], { x: 0.48, y: 0.55 }),
+      region('field-inner', 'field', ['south-west', 'west-south'], [], { x: 0.18, y: 0.83 }),
+      region('field-outer', 'field', [...ports.slice(0, 7), 'west-north'], [], { x: 0.72, y: 0.25 }),
     ],
   },
   junction: {
     name: 'Bifurcação', source: 'RoadJunctionSmall', imageRotations: 4, quantity: 4,
     regions: [
-      region('road-east', 'road', ['east']),
-      region('road-south', 'road', ['south']),
-      region('road-west', 'road', ['west']),
-      region('field-north', 'field', [...ports.slice(0, 4), 'west-north']),
-      region('field-south-east', 'field', ['east-south', 'south-east']),
-      region('field-south-west', 'field', ['south-west', 'west-south']),
+      region('road-east', 'road', ['east'], [], { x: 0.85, y: 0.5 }),
+      region('road-south', 'road', ['south'], [], { x: 0.5, y: 0.85 }),
+      region('road-west', 'road', ['west'], [], { x: 0.15, y: 0.5 }),
+      region('field-north', 'field', [...ports.slice(0, 4), 'west-north'], [], { x: 0.5, y: 0.18 }),
+      region('field-south-east', 'field', ['east-south', 'south-east'], [], { x: 0.82, y: 0.82 }),
+      region('field-south-west', 'field', ['south-west', 'west-south'], [], { x: 0.18, y: 0.82 }),
     ],
   },
   crossroads: {
     name: 'Encruzilhada', source: 'RoadCrossLarge', imageRotations: 1, quantity: 1,
     regions: [
-      region('road', 'road', sides),
-      region('field-north-east', 'field', ['north-east', 'east-north']),
-      region('field-south-east', 'field', ['east-south', 'south-east']),
-      region('field-south-west', 'field', ['south-west', 'west-south']),
-      region('field-north-west', 'field', ['west-north', 'north-west']),
+      region('road', 'road', sides, [], { x: 0.5, y: 0.5 }),
+      region('field-north-east', 'field', ['north-east', 'east-north'], [], { x: 0.8, y: 0.2 }),
+      region('field-south-east', 'field', ['east-south', 'south-east'], [], { x: 0.8, y: 0.8 }),
+      region('field-south-west', 'field', ['south-west', 'west-south'], [], { x: 0.2, y: 0.8 }),
+      region('field-north-west', 'field', ['west-north', 'north-west'], [], { x: 0.2, y: 0.2 }),
     ],
   },
   'road-end': {
     name: 'Fim de estrada', source: 'RoadEnd', imageRotations: 4, quantity: 3,
     regions: [
-      region('road', 'road', ['south']),
-      region('field', 'field', ports.filter((port) => port !== 'south')),
+      region('road', 'road', ['south'], [], { x: 0.5, y: 0.8 }),
+      region('field', 'field', ports.filter((port) => port !== 'south'), [], { x: 0.25, y: 0.3 }),
     ],
   },
   monastery: {
     name: 'Mosteiro', source: 'Monastery', imageRotations: 1, quantity: 4,
-    regions: [region('monastery', 'monastery', []), region('field', 'field', ports)],
+    regions: [region('monastery', 'monastery', [], [], { x: 0.5, y: 0.5 }), region('field', 'field', ports, [], { x: 0.18, y: 0.8 })],
   },
   'monastery-road': {
     name: 'Mosteiro e estrada', source: 'MonasteryRoad', imageRotations: 4, quantity: 2,
     regions: [
-      region('monastery', 'monastery', []),
-      region('road', 'road', ['south']),
-      region('field', 'field', ports.filter((port) => port !== 'south')),
+      region('monastery', 'monastery', [], [], { x: 0.5, y: 0.5 }),
+      region('road', 'road', ['south'], [], { x: 0.5, y: 0.85 }),
+      region('field', 'field', ports.filter((port) => port !== 'south'), [], { x: 0.2, y: 0.3 }),
     ],
   },
 }
 
 function freezeDefinition(definition: TileDefinition) {
   for (const region of definition.regions) {
+    Object.freeze(region.anchor)
     Object.freeze(region.ports)
     Object.freeze(region.adjacentCities)
     Object.freeze(region)
@@ -164,6 +171,12 @@ export function oppositePort(port: Port): Port {
   return ports[((Math.floor(index / 3) + 2) % 4) * 3 + 2 - index % 3]
 }
 
+export function rotatePoint(point: RegionPoint, rotation: Rotation): RegionPoint {
+  let { x, y } = point
+  for (let turn = 0; turn < rotation / 90; turn++) [x, y] = [1 - y, x]
+  return { x, y }
+}
+
 export class TileInstance {
   readonly id: string
   readonly kind: TileKind
@@ -179,6 +192,7 @@ export class TileInstance {
   get regions(): readonly TileRegion[] {
     return tileCatalog[this.kind].regions.map((region) => ({
       ...region,
+      anchor: rotatePoint(region.anchor, this.rotation),
       ports: region.ports.map((port) => rotatePort(port, this.rotation)),
     }))
   }

@@ -6,6 +6,8 @@ import { tileImage } from '../tiles'
 import { drawTileImage } from '../game/rendering'
 import type { Position } from '../game/position'
 import type { BoardState, PlacedTile } from '../tiles'
+import { TileInstance } from '../game/tiles'
+import type { FollowerChoice } from '../game/actions'
 
 interface BoardProps {
   tiles: BoardState
@@ -16,8 +18,9 @@ interface BoardProps {
   validPositions: readonly Position[]
   unfillablePositions: readonly Position[]
   warnings: ReadonlyMap<string, readonly Position[]>
+  followerChoices: readonly FollowerChoice[]
   theme: 'light' | 'dark'
-  onCellClick: (position: string) => void
+  onCellClick: (position: string, regionId?: string) => void
 }
 
 interface Camera {
@@ -55,6 +58,7 @@ export default function Board({
   validPositions,
   unfillablePositions,
   warnings,
+  followerChoices,
   theme,
   onCellClick,
 }: BoardProps) {
@@ -339,14 +343,11 @@ export default function Board({
       if (!image?.complete || image.naturalWidth === 0) continue
       const screenX = camera.x + x * cellPx
       const screenY = camera.y + y * cellPx
-      const meeplePx = cellPx * 0.4
-      context.drawImage(
-        image,
-        screenX + cellPx / 2 - meeplePx / 2,
-        screenY + cellPx / 2 - meeplePx / 2,
-        meeplePx,
-        meeplePx,
-      )
+      const region = new TileInstance('view', tile.kind, tile.rotation).regions.find((item) => item.id === tile.meepleRegion)
+      const anchor = region?.anchor ?? { x: 0.5, y: 0.5 }
+      const meeplePx = cellPx * 0.3
+      drawTileImage(context, image, screenX + anchor.x * cellPx - meeplePx / 2,
+        screenY + anchor.y * cellPx - meeplePx / 2, meeplePx, region?.terrain === 'field' ? 90 : 0)
     }
 
     if (pendingPosition) {
@@ -359,6 +360,22 @@ export default function Board({
       context.lineWidth = 2
       context.strokeStyle = pendingColor
       context.strokeRect(screenX + 1.5, screenY + 1.5, cellPx - 3, cellPx - 3)
+      for (const [index, choice] of followerChoices.entries()) {
+        if (choice.selected) continue
+        const x = screenX + choice.anchor.x * cellPx
+        const y = screenY + choice.anchor.y * cellPx
+        context.save()
+        context.beginPath()
+        context.arc(x, y, Math.max(6, cellPx * 0.09), 0, Math.PI * 2)
+        context.fillStyle = choice.available ? '#526846' : '#6c6c68'
+        context.fill()
+        context.fillStyle = '#fffef9'
+        context.font = `600 ${Math.max(9, cellPx * 0.12)}px sans-serif`
+        context.textAlign = 'center'
+        context.textBaseline = 'middle'
+        context.fillText(String(index + 1), x, y)
+        context.restore()
+      }
     }
 
     if (placing && preview && hoverCell) {
@@ -374,7 +391,7 @@ export default function Board({
         }
       }
     }
-  }, [tiles, preview, pendingPosition, pendingColor, placing, validPositions, unfillablePositions, warnings, theme, camera, viewport, imageVersion, dpr, hoverCell])
+  }, [tiles, preview, pendingPosition, pendingColor, placing, validPositions, unfillablePositions, warnings, followerChoices, theme, camera, viewport, imageVersion, dpr, hoverCell])
 
   function handlePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.pointerType === 'mouse' && event.button !== 0) return
@@ -419,7 +436,21 @@ export default function Board({
     if (stage?.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId)
     if (current.moved) return
     const cell = cellAt(event.clientX, event.clientY)
-    onCellClick(`${cell.x},${cell.y}`)
+    const key = `${cell.x},${cell.y}`
+    if (!placing && key === pendingPosition && stage) {
+      const rect = stage.getBoundingClientRect()
+      const { x, y, zoom } = cameraRef.current
+      const localX = (event.clientX - rect.left - x) / (BASE_CELL * zoom) - cell.x
+      const localY = (event.clientY - rect.top - y) / (BASE_CELL * zoom) - cell.y
+      const nearest = followerChoices.map((choice) => ({
+        choice, distance: Math.hypot(choice.anchor.x - localX, choice.anchor.y - localY),
+      })).sort((a, b) => a.distance - b.distance)[0]
+      if (nearest && nearest.distance <= 0.16) {
+        onCellClick(key, nearest.choice.id)
+        return
+      }
+    }
+    onCellClick(key)
   }
 
   function handlePointerCancel() {

@@ -1,9 +1,13 @@
 import { tileCatalog, tileKinds } from './game/tiles'
-import type { TileKind, Rotation } from './game/tiles'
+import type { TileKind, Rotation, Terrain } from './game/tiles'
 
 export { tileCatalog, tileKinds }
 export type { TileKind, Rotation }
 export type PlayerColor = 'blue' | 'red' | 'yellow' | 'black'
+
+export const terrainNames: Record<Terrain, string> = {
+  city: 'Cidade', road: 'Estrada', field: 'Campo', monastery: 'Mosteiro',
+}
 
 export const tileNames = Object.fromEntries(
   tileKinds.map((kind) => [kind, tileCatalog[kind].name]),
@@ -20,6 +24,7 @@ export interface PlacedTile {
   kind: TileKind
   rotation: Rotation
   meeple?: PlayerColor
+  meepleRegion?: string
 }
 
 export type BoardState = Record<string, PlacedTile>

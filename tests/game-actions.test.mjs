@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { initialGame } from '../src/game.ts'
-import { placeGameTile, undoGamePlacement } from '../src/game/actions.ts'
+import { placeGameTile, selectGameFollower, undoGamePlacement } from '../src/game/actions.ts'
 import { Position } from '../src/game/position.ts'
 
 test('a nova interface começa com o mesmo tabuleiro válido do domínio', () => {
@@ -45,11 +45,7 @@ test('colocar e desfazer mantém o mapa visual sincronizado com o modelo', () =>
 test('desfazer uma colocação com meeple devolve a reserva sem alterar o histórico', () => {
   const state = { ...initialGame, currentKind: 'road', rotation: 90 }
   const placed = placeGameTile(state, '1,0')
-  const withMeeple = {
-    ...placed,
-    board: { ...placed.board, '1,0': { ...placed.board['1,0'], meeple: state.players[0].color } },
-    players: placed.players.map((player, index) => index === 0 ? { ...player, meeples: player.meeples - 1 } : player),
-  }
+  const withMeeple = selectGameFollower(placed, 'road')
   const undone = undoGamePlacement(withMeeple)
   assert.deepEqual(undone.players, state.players)
   assert.deepEqual(undone.board, state.board)

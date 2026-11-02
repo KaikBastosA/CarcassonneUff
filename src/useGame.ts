@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { initialGame } from './game'
-import { placeGameTile, undoGamePlacement } from './game/actions'
+import { confirmGameTurn, placeGameTile, selectGameFollower, undoGamePlacement } from './game/actions'
 import type { GameState } from './game'
 import type { Rotation } from './tiles'
 
@@ -19,25 +19,8 @@ export function useGame() {
     setState((current) => placeGameTile(current, position))
   }
 
-  function toggleMeeple() {
-    setState((current) => {
-      if (current.phase !== 'meeple' || !current.pendingPosition) return current
-      const player = current.players[current.currentPlayerIndex]
-      const tile = current.board[current.pendingPosition]
-      if (!tile) return current
-      const hasMeeple = Boolean(tile.meeple)
-      if (!hasMeeple && player.meeples === 0) return current
-      const board = {
-        ...current.board,
-        [current.pendingPosition]: { ...tile, meeple: hasMeeple ? undefined : player.color },
-      }
-      const players = current.players.map((item, index) => (
-        index === current.currentPlayerIndex
-          ? { ...item, meeples: item.meeples + (hasMeeple ? 1 : -1) }
-          : item
-      ))
-      return { ...current, board, players }
-    })
+  function selectFollower(regionId: string | null) {
+    setState((current) => selectGameFollower(current, regionId))
   }
 
   function undoPlacement() {
@@ -45,32 +28,8 @@ export function useGame() {
   }
 
   function confirm() {
-    setState((current) => {
-      if (current.phase !== 'meeple' || !current.pendingPosition) return current
-      const player = current.players[current.currentPlayerIndex]
-      const nextPlayerIndex = (current.currentPlayerIndex + 1) % current.players.length
-      const nextDeckIndex = current.deckIndex + 1
-      const event = {
-        id: Date.now(),
-        playerId: player.id,
-        text: 'colocou uma peça',
-        round: current.round,
-      }
-      return {
-        ...current,
-        phase: 'place',
-        pendingPosition: null,
-        previousBoard: null,
-        message: '',
-        currentPlayerIndex: nextPlayerIndex,
-        round: nextPlayerIndex === 0 ? current.round + 1 : current.round,
-        deckIndex: nextDeckIndex,
-        currentKind: current.deck[nextDeckIndex] ?? current.deck[0],
-        rotation: 0,
-        activity: [event, ...current.activity],
-      }
-    })
+    setState(confirmGameTurn)
   }
 
-  return { state, rotate, place, toggleMeeple, undoPlacement, confirm }
+  return { state, rotate, place, selectFollower, undoPlacement, confirm }
 }

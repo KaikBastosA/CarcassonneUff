@@ -1,9 +1,13 @@
 import { GameBoard } from './game/board.ts'
 import { Position } from './game/position.ts'
 import { TileInstance } from './game/tiles.ts'
+import { createFollowers } from './game/followers.ts'
+import type { Follower } from './game/followers.ts'
+import { StructureMesh } from './game/mesh.ts'
+import type { ScoringRecord } from './game/scoring.ts'
 import type { BoardState, PlayerColor, Rotation, TileKind } from './tiles'
 
-export type GamePhase = 'place' | 'meeple'
+export type GamePhase = 'place' | 'meeple' | 'finished'
 
 export interface Player {
   id: string
@@ -11,6 +15,7 @@ export interface Player {
   color: PlayerColor
   score: number
   meeples: number
+  followers: readonly Follower[]
   local: boolean
 }
 
@@ -29,8 +34,11 @@ export interface GameState {
   phase: GamePhase
   board: BoardState
   model: GameBoard
+  mesh: StructureMesh
   previousBoard: GameBoard | null
   message: string
+  scoring: readonly ScoringRecord[]
+  winners: readonly string[]
   currentKind: TileKind
   rotation: Rotation
   deck: TileKind[]
@@ -77,28 +85,28 @@ export const gameDeck: TileKind[] = [
 ]
 
 export const initialPlayers: Player[] = [
-  { id: 'you', name: 'Você', color: 'blue', score: 42, meeples: 6, local: true },
-  { id: 'ana', name: 'Ana', color: 'red', score: 37, meeples: 7, local: false },
-  { id: 'bruno', name: 'Bruno', color: 'yellow', score: 31, meeples: 5, local: false },
-  { id: 'carla', name: 'Carla', color: 'black', score: 26, meeples: 7, local: false },
+  { id: 'you', name: 'Você', color: 'blue', score: 0, meeples: 7, followers: createFollowers('you'), local: true },
+  { id: 'ana', name: 'Ana', color: 'red', score: 0, meeples: 7, followers: createFollowers('ana'), local: false },
+  { id: 'bruno', name: 'Bruno', color: 'yellow', score: 0, meeples: 7, followers: createFollowers('bruno'), local: false },
+  { id: 'carla', name: 'Carla', color: 'black', score: 0, meeples: 7, followers: createFollowers('carla'), local: false },
 ]
 
-export const initialActivity: GameEvent[] = [
-  { id: 4, playerId: 'ana', text: 'completou uma cidade', points: 8, round: 2 },
-  { id: 3, playerId: 'bruno', text: 'colocou um mosteiro', round: 2 },
-  { id: 2, playerId: 'you', text: 'completou uma estrada', points: 4, round: 2 },
-  { id: 1, playerId: 'carla', text: 'entrou na sala', round: 1 },
-]
+export const initialActivity: GameEvent[] = []
+
+const initialModel = new GameBoard().place(new TileInstance('start', 'city-road'), new Position(0, 0))
 
 export const initialGame: GameState = {
   players: initialPlayers,
   currentPlayerIndex: 0,
-  round: 3,
+  round: 1,
   phase: 'place',
   board: { '0,0': { kind: 'city-road', rotation: 0 } },
-  model: new GameBoard().place(new TileInstance('start', 'city-road'), new Position(0, 0)),
+  model: initialModel,
+  mesh: new StructureMesh(initialModel),
   previousBoard: null,
   message: '',
+  scoring: [],
+  winners: [],
   currentKind: gameDeck[0],
   rotation: 0,
   deck: gameDeck,
