@@ -3,6 +3,7 @@ import type { TileInstance } from './game/tiles.ts'
 import type { Follower } from './game/followers.ts'
 import type { StructureMesh } from './game/mesh.ts'
 import type { ScoringRecord } from './game/scoring.ts'
+import type { PlayerStrategy } from './game/strategy.ts'
 import type { BoardState, PlayerColor, Rotation } from './tiles'
 
 export type GamePhase = 'configure' | 'place' | 'meeple' | 'finished'
@@ -14,7 +15,7 @@ export interface Player {
   score: number
   meeples: number
   followers: readonly Follower[]
-  local: boolean
+  strategy: PlayerStrategy
 }
 
 export interface GameEvent {

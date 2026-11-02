@@ -405,6 +405,7 @@ body {
 .setup-card input, .setup-card select { min-width: 0; min-height: 40px; padding: 8px 10px; font: inherit; color: var(--ink); background: var(--surface-raised); border: 1px solid var(--border-strong); border-radius: 5px; }
 .setup-players { display: grid; gap: 14px; }
 .setup-player { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.setup-player > label:first-child { grid-column: 1 / -1; }
 .setup-card .setup-error { color: var(--accent); }
 .new-game-button { border: 1px solid var(--border); border-radius: 6px; background: var(--surface); padding: 7px 10px; color: var(--ink); font: inherit; font-size: 11px; }
 @media (max-width: 480px) { .setup-card { padding: 18px; } .setup-player { grid-template-columns: 1fr; } .presence-label { display: none; } }

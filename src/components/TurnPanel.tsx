@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react'
 import { playerHex } from '../game'
 import type { GamePhase, Player } from '../game'
 import { terrainNames, tileNames } from '../tiles'
+import { difficultyNames } from '../game/strategy'
 import type { FollowerChoice } from '../game/actions'
 import type { Rotation, TileKind, TileVariant } from '../tiles'
 import Meeple from './Meeple'
@@ -50,6 +51,7 @@ export default function TurnPanel({
   winners,
 }: TurnPanelProps) {
   const placed = phase === 'meeple'
+  const automatic = player.strategy.automatic
   const roleNames = { knight: 'Cavaleiro', thief: 'Ladrão', monk: 'Monge', farmer: 'Fazendeiro' }
 
   if (phase === 'finished') return (
@@ -69,8 +71,8 @@ export default function TurnPanel({
     <section className="turn" aria-label="Painel da jogada" style={{ '--player-color': playerHex[player.color] } as CSSProperties}>
       <div className="turn-head">
         <div>
-          <div className="turn-kicker">{player.local ? 'Sua vez' : `Vez de ${player.name}`}</div>
-          <h2 className="turn-title">{placed ? 'Confirme sua jogada' : 'Coloque sua peça'}</h2>
+          <div className="turn-kicker">Vez de {player.name}{automatic ? ` · IA · ${difficultyNames[player.strategy.difficulty ?? 'basic']}` : ''}</div>
+          <h2 className="turn-title">{automatic ? 'IA pensando…' : placed ? 'Confirme sua jogada' : 'Coloque sua peça'}</h2>
         </div>
         <span className="turn-player-dot" aria-hidden="true" />
       </div>
@@ -91,13 +93,13 @@ export default function TurnPanel({
           <div className="rotation-row">
             <button
               type="button" className="icon-button" onClick={() => onRotate(-1)}
-              disabled={placed} aria-label="Girar peça para a esquerda"
+              disabled={placed || automatic} aria-label="Girar peça para a esquerda"
             >
               <RotateCcw size={16} aria-hidden="true" />
             </button>
             <button
               type="button" className="icon-button" onClick={() => onRotate(1)}
-              disabled={placed} aria-label="Girar peça para a direita"
+              disabled={placed || automatic} aria-label="Girar peça para a direita"
             >
               <RotateCw size={16} aria-hidden="true" />
             </button>
@@ -118,14 +120,14 @@ export default function TurnPanel({
       </ol>
 
       <p className="turn-instruction" role="status">
-        {message || (placed
+        {automatic ? 'A IA está escolhendo a posição, a rotação e um seguidor opcional.' : message || (placed
           ? 'Escolha uma região da peça para seu seguidor ou confirme sem colocar.'
           : `${validCount} encaixes nesta orientação. Gire a peça para testar outras posições.`)}
       </p>
       <p className="board-legend">Verde: encaixe válido · Amarelo: cria espaço sem encaixe · ×: sem peça compatível no catálogo</p>
       {unfillableCount > 0 && <p className="board-legend">{unfillableCount} espaços sem encaixe no catálogo.</p>}
 
-      {placed && (
+      {placed && !automatic && (
         <div className="turn-actions">
           <div className="region-choices" role="group" aria-label="Região do seguidor">
             {followerChoices.map((choice, index) => <button key={choice.id} type="button"

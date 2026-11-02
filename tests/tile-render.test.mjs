@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { createServer } from 'vite'
 import { rotations, tileKinds, TileInstance } from '../src/game/tiles.ts'
 import { finalizeGame } from '../src/game/scoring.ts'
+import { GameSession } from '../src/game/session.ts'
 import { initialGame, withTile } from './helpers/game.mjs'
 import { confirmGameTurn as settleTurn, getFollowerChoices, placeGameTile, selectGameFollower } from '../src/game/actions.ts'
 
@@ -132,6 +133,68 @@ test('o brasão aparece na região da cidade e gira com a arte sem cobrir o segu
     }))
     assert.ok(markup.includes('Cidade em curva com brasão'))
     assert.ok(markup.includes('class="tile-shield"'))
+  } finally {
+    await server.close()
+  }
+})
+
+test('configuração distingue humanos e IA e o painel bloqueia ações durante o turno automático', async () => {
+  const server = await createServer({ server: { middlewareMode: true, watch: null }, appType: 'custom' })
+  try {
+    const { default: GameSetup } = await server.ssrLoadModule('/src/components/GameSetup.tsx')
+    const { default: TurnPanel } = await server.ssrLoadModule('/src/components/TurnPanel.tsx')
+    const configuration = {
+      players: [{ name: 'Um', color: 'blue', control: 'human' }, { name: 'Dois', color: 'red', control: 'human' }, { name: 'Robô', color: 'yellow', control: 'computer' }],
+      startingPlayerIndex: 2, seed: 1,
+    }
+    const setup = renderToStaticMarkup(createElement(GameSetup, { configuration, message: '', onStart() {} }))
+    assert.ok(setup.includes('Controle do jogador 3'))
+    assert.equal((setup.match(/<option value="computer" selected="">IA<\/option>/g) ?? []).length, 1)
+    assert.equal((setup.match(/<option value="human" selected="">Humano<\/option>/g) ?? []).length, 2)
+    const match = GameSession.configure().start(configuration)
+    for (const phase of ['place', 'meeple']) {
+      const markup = renderToStaticMarkup(createElement(TurnPanel, {
+        player: match.snapshot.players[2], phase, kind: match.snapshot.deck[0].kind, rotation: 0,
+        deckCount: 70, discardedCount: 0, pendingMeeple: false, followerChoices: [], message: '',
+        validCount: 0, unfillableCount: 0, standings: [], winners: [],
+        onRotate() {}, onSelectFollower() {}, onUndo() {}, onConfirm() {},
+      }))
+      assert.ok(markup.includes('Robô · IA'))
+      assert.ok(markup.includes('IA pensando…'))
+      assert.equal((markup.match(/disabled="" aria-label="Girar peça/g) ?? []).length, 2)
+      assert.ok(!markup.includes('Confirmar jogada'))
+      assert.ok(!markup.includes('Desfazer colocação'))
+    }
+  } finally {
+    await server.close()
+  }
+})
+
+test('dificuldade é escolhida para cada IA e identificada no painel', async () => {
+  const server = await createServer({ server: { middlewareMode: true, watch: null }, appType: 'custom' })
+  try {
+    const { default: GameSetup } = await server.ssrLoadModule('/src/components/GameSetup.tsx')
+    const { default: TurnPanel } = await server.ssrLoadModule('/src/components/TurnPanel.tsx')
+    const configuration = {
+      players: [{ name: 'Humano', color: 'blue', control: 'human' },
+        { name: 'IA um', color: 'red', control: 'computer', difficulty: 'basic' },
+        { name: 'IA dois', color: 'yellow', control: 'computer', difficulty: 'strategic' }],
+      startingPlayerIndex: 2, seed: 1,
+    }
+    const setup = renderToStaticMarkup(createElement(GameSetup, { configuration, message: '', onStart() {} }))
+    assert.ok(!setup.includes('Dificuldade do jogador 1'))
+    assert.ok(setup.includes('Dificuldade do jogador 2'))
+    assert.ok(setup.includes('Dificuldade do jogador 3'))
+    assert.equal((setup.match(/<option value="basic" selected="">Básico<\/option>/g) ?? []).length, 1)
+    assert.equal((setup.match(/<option value="strategic" selected="">Estratégico<\/option>/g) ?? []).length, 1)
+    const match = GameSession.configure().start(configuration)
+    const markup = renderToStaticMarkup(createElement(TurnPanel, {
+      player: match.snapshot.players[2], phase: 'place', kind: match.snapshot.deck[0].kind, rotation: 0,
+      deckCount: 70, discardedCount: 0, pendingMeeple: false, followerChoices: [], message: '',
+      validCount: 0, unfillableCount: 0, standings: [], winners: [],
+      onRotate() {}, onSelectFollower() {}, onUndo() {}, onConfirm() {},
+    }))
+    assert.ok(markup.includes('IA dois · IA · Estratégico'))
   } finally {
     await server.close()
   }

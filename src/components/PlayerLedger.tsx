@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react'
 import { playerAvatarInk, playerHex } from '../game'
 import type { GameEvent, Player } from '../game'
 import Meeple from './Meeple'
+import { difficultyNames } from '../game/strategy'
 
 interface PlayerLedgerProps {
   players: readonly Player[]
@@ -37,6 +38,7 @@ export default function PlayerLedger({ players, currentPlayerId, activity, round
               <div className="player-info">
                 <div className="player-name">
                   {player.name}
+                  {player.strategy.automatic ? ` · IA · ${difficultyNames[player.strategy.difficulty ?? 'basic']}` : ''}
                 </div>
                 <div className="player-meta">
                   <span className="meeple-count"><Meeple color={player.color} />{player.meeples}</span>
