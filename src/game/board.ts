@@ -93,7 +93,7 @@ export class GameBoard {
   getValidMoves(tile: TileInstance): TilePlacement[] {
     const positions = this.candidatePositions()
     return rotations.flatMap((rotation) => {
-      const oriented = new TileInstance(tile.id, tile.kind, rotation)
+      const oriented = new TileInstance(tile.id, tile.kind, rotation, tile.variant)
       return positions.flatMap((position) => this.validatePlacement(oriented, position).valid
         ? [{ tile: oriented, position }]
         : [])

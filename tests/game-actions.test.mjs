@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { initialGame } from '../src/game.ts'
+import { initialGame, withTile } from './helpers/game.mjs'
 import { placeGameTile, selectGameFollower, undoGamePlacement } from '../src/game/actions.ts'
 import { Position } from '../src/game/position.ts'
 
@@ -11,7 +11,7 @@ test('a nova interface começa com o mesmo tabuleiro válido do domínio', () =>
 })
 
 test('a ação da interface recusa encaixes inválidos sem alterar o mapa ou a etapa', () => {
-  const state = { ...initialGame, currentKind: 'road', rotation: 0 }
+  const state = withTile(initialGame, 'road', 0)
   for (const position of ['1,0', '1,1', '20,20', '0,0', 'invalid', '1,2,3', '9007199254740992,0']) {
     const result = placeGameTile(state, position)
     assert.equal(result.board, state.board)
@@ -23,14 +23,14 @@ test('a ação da interface recusa encaixes inválidos sem alterar o mapa ou a e
 })
 
 test('colocar e desfazer mantém o mapa visual sincronizado com o modelo', () => {
-  const state = { ...initialGame, currentKind: 'road', rotation: 90 }
+  const state = withTile(initialGame, 'road', 90)
   const placed = placeGameTile(state, '1,0')
   assert.equal(placed.phase, 'meeple')
   assert.equal(placed.model.size, 2)
   assert.equal(placed.previousBoard, state.model)
   assert.equal(placed.pendingPosition, '1,0')
   assert.equal(placed.model.tileAt(new Position(1, 0)).rotation, 90)
-  assert.deepEqual(placed.board['1,0'], { kind: 'road', rotation: 90 })
+  assert.deepEqual(placed.board['1,0'], { kind: 'road', rotation: 90, variant: 'plain' })
   assert.equal(placeGameTile(placed, '2,0'), placed)
 
   const undone = undoGamePlacement(placed)
@@ -43,7 +43,7 @@ test('colocar e desfazer mantém o mapa visual sincronizado com o modelo', () =>
 })
 
 test('desfazer uma colocação com meeple devolve a reserva sem alterar o histórico', () => {
-  const state = { ...initialGame, currentKind: 'road', rotation: 90 }
+  const state = withTile(initialGame, 'road', 90)
   const placed = placeGameTile(state, '1,0')
   const withMeeple = selectGameFollower(placed, 'road')
   const undone = undoGamePlacement(withMeeple)
@@ -61,7 +61,7 @@ test('os avisos de espaços sem encaixe são preservados pela nova ação da int
     [2, -1, 'city-corner', 180], [2, 0, 'city', 0],
   ]
   for (const [x, y, currentKind, rotation] of placements) {
-    const current = { ...state, phase: 'place', currentKind, rotation }
+    const current = withTile({ ...state, phase: 'place' }, currentKind, rotation)
     state = placeGameTile(current, `${x},${y}`)
     assert.equal(state.phase, 'meeple')
     if (x === 2 && y === 0) {

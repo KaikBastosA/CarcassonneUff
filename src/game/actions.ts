@@ -5,7 +5,7 @@ import { TileInstance } from './tiles.ts'
 import type { RegionPoint, Terrain } from './tiles.ts'
 import type { Follower, FollowerRole } from './followers.ts'
 import { StructureMesh } from './mesh.ts'
-import { applyScores, calculateScores, finalizeGame } from './scoring.ts'
+import { applyScores, calculateScores } from './scoring.ts'
 
 export interface FollowerChoice {
   readonly id: string
@@ -22,7 +22,8 @@ function allFollowers(current: GameState): readonly Follower[] {
 
 function pendingTile(current: GameState): TileInstance | undefined {
   const last = current.model.placements.at(-1)
-  return current.previousBoard && last?.position.key === current.pendingPosition ? last.tile : undefined
+  const drawn = current.deck[current.deckIndex]
+  return current.previousBoard && last?.position.key === current.pendingPosition && last.tile.id === drawn?.id ? last.tile : undefined
 }
 
 export function getFollowerChoices(current: GameState): readonly FollowerChoice[] {
@@ -79,7 +80,7 @@ export function selectGameFollower(current: GameState, regionId: string | null):
     board: {
       ...current.board,
       [current.pendingPosition]: {
-        kind: tile.kind, rotation: tile.rotation,
+        kind: tile.kind, rotation: tile.rotation, variant: tile.variant,
         meeple: allocated ? player.color : undefined,
         meepleRegion: allocated?.allocation?.regionId,
       },
@@ -95,7 +96,8 @@ export function placeGameTile(current: GameState, key: string): GameState {
   const [x, y] = key.split(',').map(Number)
   if (!Number.isSafeInteger(x) || !Number.isSafeInteger(y)) return { ...current, message: 'Posição inválida.' }
   const position = new Position(x, y)
-  const tile = new TileInstance(`tile-${current.deckIndex}`, current.currentKind, current.rotation)
+  const drawn = current.deck[current.deckIndex]
+  const tile = new TileInstance(drawn.id, drawn.kind, current.rotation, drawn.variant)
   const validation = current.model.validatePlacement(tile, position)
   if (!validation.valid) return { ...current, message: placementMessages[validation.reason] }
 
@@ -103,7 +105,7 @@ export function placeGameTile(current: GameState, key: string): GameState {
   const model = current.model.place(tile, position)
   return {
     ...current,
-    board: { ...current.board, [position.key]: { kind: tile.kind, rotation: tile.rotation } },
+    board: { ...current.board, [position.key]: { kind: tile.kind, rotation: tile.rotation, variant: tile.variant } },
     model,
     mesh: new StructureMesh(model, allFollowers(current)),
     previousBoard: current.model,
@@ -154,11 +156,10 @@ export function confirmGameTurn(current: GameState): GameState {
   const next: GameState = {
     ...settled, phase: 'place', pendingPosition: null, previousBoard: null,
     deckIndex, currentPlayerIndex,
-    round: !exhausted && currentPlayerIndex === 0 ? current.round + 1 : current.round,
-    currentKind: current.deck[deckIndex] ?? current.currentKind,
+    round: !exhausted && currentPlayerIndex === current.startingPlayerIndex ? current.round + 1 : current.round,
     rotation: 0,
     message: records.some(({ followerIds }) => followerIds.length > 0)
       ? 'Estruturas concluídas pontuadas. Seguidores devolvidos à reserva.' : '',
   }
-  return exhausted ? finalizeGame(next) : next
+  return next
 }

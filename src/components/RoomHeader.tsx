@@ -4,15 +4,17 @@ import type { Player } from '../game'
 import type { Theme } from '../theme'
 
 interface RoomHeaderProps {
-  players: Player[]
+  players: readonly Player[]
   theme: Theme
   onToggleTheme: () => void
+  onNewGame: () => void
 }
 
 export default function RoomHeader({
   players,
   theme,
   onToggleTheme,
+  onNewGame,
 }: RoomHeaderProps) {
   return (
     <header className="room-header">
@@ -21,6 +23,7 @@ export default function RoomHeader({
         <span className="preview-tag">Prévia local</span>
       </div>
       <div className="presence">
+        <button type="button" className="new-game-button" onClick={onNewGame}>Nova partida</button>
         <button
           type="button" className="theme-toggle" onClick={onToggleTheme}
           aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}

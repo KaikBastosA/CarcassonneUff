@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { LocateFixed, Minus, Plus } from 'lucide-react'
-import { meepleImage } from './Meeple'
-import { tileImage } from '../tiles'
+import { meepleFilter, meepleImage } from './Meeple'
+import { shieldImage, tileImage } from '../tiles'
 import { drawTileImage } from '../game/rendering'
 import type { Position } from '../game/position'
 import type { BoardState, PlacedTile } from '../tiles'
@@ -174,9 +174,11 @@ export default function Board({
     const sources = new Set<string>()
     for (const tile of Object.values(tiles)) {
       sources.add(tileImage(tile.kind))
+      if (tile.variant === 'shield') sources.add(shieldImage)
       if (tile.meeple) sources.add(meepleImage(tile.meeple))
     }
     if (preview) sources.add(tileImage(preview.kind))
+    if (preview?.variant === 'shield') sources.add(shieldImage)
 
     const jobs: Promise<void>[] = []
     let pending = false
@@ -243,6 +245,15 @@ export default function Board({
     const cellPx = BASE_CELL * camera.zoom
     const featherPx = 2 * camera.zoom
     const drawPx = cellPx + featherPx * 2
+    const drawShields = (tile: PlacedTile, screenX: number, screenY: number) => {
+      if (tile.variant !== 'shield') return
+      const image = images.current.get(shieldImage)
+      if (!image?.complete || image.naturalWidth === 0) return
+      const markers = new TileInstance('view', tile.kind, tile.rotation, tile.variant).shieldMarkers
+      const size = cellPx * 0.22
+      for (const anchor of markers) drawTileImage(context, image, screenX + anchor.x * cellPx - size / 2,
+        screenY + anchor.y * cellPx - size / 2, size, tile.rotation)
+    }
 
     if (placing) {
       const offsetX = ((camera.x % cellPx) + cellPx) % cellPx
@@ -335,6 +346,7 @@ export default function Board({
       const sprite = getSprite(tileImage(tile.kind))
       if (!sprite) continue
       drawTileImage(context, sprite, screenX - featherPx, screenY - featherPx, drawPx, tile.rotation)
+      drawShields(tile, screenX, screenY)
     }
 
     for (const { x, y, tile } of entries) {
@@ -343,11 +355,14 @@ export default function Board({
       if (!image?.complete || image.naturalWidth === 0) continue
       const screenX = camera.x + x * cellPx
       const screenY = camera.y + y * cellPx
-      const region = new TileInstance('view', tile.kind, tile.rotation).regions.find((item) => item.id === tile.meepleRegion)
+      const region = new TileInstance('view', tile.kind, tile.rotation, tile.variant).regions.find((item) => item.id === tile.meepleRegion)
       const anchor = region?.anchor ?? { x: 0.5, y: 0.5 }
       const meeplePx = cellPx * 0.3
+      context.save()
+      context.filter = meepleFilter(tile.meeple)
       drawTileImage(context, image, screenX + anchor.x * cellPx - meeplePx / 2,
         screenY + anchor.y * cellPx - meeplePx / 2, meeplePx, region?.terrain === 'field' ? 90 : 0)
+      context.restore()
     }
 
     if (pendingPosition) {
@@ -387,6 +402,7 @@ export default function Board({
           const screenY = camera.y + hoverCell.y * cellPx
           context.globalAlpha = 0.55
           drawTileImage(context, image, screenX, screenY, cellPx, preview.rotation)
+          drawShields(preview, screenX, screenY)
           context.globalAlpha = 1
         }
       }
