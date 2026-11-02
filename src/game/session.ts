@@ -26,7 +26,7 @@ export interface MatchConfiguration {
 }
 
 export const defaultConfiguration: MatchConfiguration = Object.freeze({
-  players: Object.freeze([Object.freeze({ name: 'Você', color: 'blue' as const }), Object.freeze({ name: 'Ana', color: 'red' as const })]),
+  players: Object.freeze([Object.freeze({ name: 'Jogador 1', color: 'blue' as const }), Object.freeze({ name: 'Jogador 2', color: 'red' as const })]),
   startingPlayerIndex: 0,
 })
 

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import Board from './components/Board'
 import PlayerLedger from './components/PlayerLedger'
-import RoomHeader from './components/RoomHeader'
+import GameHeader from './components/GameHeader'
 import TurnPanel from './components/TurnPanel'
 import GameSetup from './components/GameSetup'
-import { playerHex, roomCode } from './game'
+import { playerHex } from './game'
 import { themeStorageKey } from './theme'
 import type { Theme } from './theme'
 import { useGame } from './useGame'
@@ -14,7 +14,6 @@ import type { PlacedTile } from './tiles'
 
 export default function App() {
   const { state, configuration, start, rotate, place, selectFollower, undoPlacement, confirm, newGame } = useGame()
-  const [copied, setCopied] = useState(false)
   const [theme, setTheme] = useState<Theme>(() => (
     document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
   ))
@@ -43,16 +42,6 @@ export default function App() {
     localStorage.setItem(themeStorageKey, theme)
   }, [theme])
 
-  async function copyInvite() {
-    try {
-      await navigator.clipboard.writeText(`${location.origin}${location.pathname}?sala=${roomCode}`)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1800)
-    } catch {
-      setCopied(false)
-    }
-  }
-
   function handleCell(position: string, regionId?: string) {
     if (automatic) return
     if (state.phase === 'place') {
@@ -68,7 +57,7 @@ export default function App() {
 
   if (state.phase === 'configure') return (
     <main className="app">
-      <RoomHeader players={state.players} theme={theme} onToggleTheme={toggleTheme} onNewGame={newGame} />
+      <GameHeader theme={theme} onToggleTheme={toggleTheme} onNewGame={newGame} />
       <GameSetup configuration={configuration} message={state.message} onStart={start} />
     </main>
   )
@@ -88,15 +77,14 @@ export default function App() {
         theme={theme}
         onCellClick={handleCell}
       />
-      <RoomHeader
-        players={state.players} theme={theme}
+      <GameHeader
+        theme={theme}
         onToggleTheme={toggleTheme}
         onNewGame={newGame}
       />
       <PlayerLedger
         players={state.players} currentPlayerId={state.phase === 'finished' ? '' : player.id}
         activity={state.activity} round={state.round}
-        copied={copied} onCopyInvite={copyInvite}
       />
       <TurnPanel
         player={player}

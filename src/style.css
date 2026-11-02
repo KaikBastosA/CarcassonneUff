@@ -85,7 +85,7 @@ img { display: block; max-width: 100%; }
   padding: 0 24px;
 }
 
-.room-header {
+.game-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -110,39 +110,7 @@ img { display: block; max-width: 100%; }
   white-space: nowrap;
 }
 
-.brand-divider {
-  width: 1px;
-  height: 20px;
-  background: var(--border);
-  flex: none;
-}
-
-.room-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 30px;
-  padding: 0 9px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--ink-secondary);
-  transition: background-color 0.15s ease, border-color 0.15s ease;
-}
-
-.room-chip:hover { background: var(--surface-raised); border-color: var(--border-strong); }
-.room-chip:active { transform: scale(0.96); }
-.room-chip-label { font-size: 10px; color: var(--ink-muted); }
-.room-code {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--ink);
-}
-.room-chip svg { color: var(--ink-muted); }
-
-.preview-tag {
+.game-mode {
   padding-left: 12px;
   border-left: 1px solid var(--border);
   font-size: 10px;
@@ -150,14 +118,12 @@ img { display: block; max-width: 100%; }
   white-space: nowrap;
 }
 
-.presence {
+.header-actions {
   display: flex;
   align-items: center;
   gap: 10px;
   flex: none;
 }
-
-.avatar-stack { display: flex; }
 
 .avatar {
   display: grid;
@@ -171,23 +137,6 @@ img { display: block; max-width: 100%; }
   font-weight: 600;
   line-height: 1;
   box-shadow: 0 0 0 1px rgba(255, 252, 244, 0.35);
-}
-
-.avatar-sm {
-  width: 26px;
-  height: 26px;
-  margin-left: -6px;
-  border: 2px solid var(--bg);
-  font-size: 10px;
-  box-shadow: none;
-}
-.avatar-sm:first-child { margin-left: 0; }
-
-.presence-label {
-  font-size: 11px;
-  color: var(--ink-muted);
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
 }
 
 .game {
@@ -320,26 +269,6 @@ img { display: block; max-width: 100%; }
   font-size: 9px;
   color: var(--ink-muted);
 }
-
-.invite-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  height: 36px;
-  margin-top: 4px;
-  padding: 0 10px;
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-md);
-  color: var(--ink-secondary);
-  font-size: 11px;
-  text-align: left;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
-}
-
-.invite-row:hover { background: var(--surface-raised); border-color: var(--border-strong); }
-.invite-row:active { transform: scale(0.99); }
-.invite-row svg { flex: none; color: var(--ink-muted); }
 
 .ledger-divider {
   height: 1px;
@@ -808,7 +737,6 @@ img { display: block; max-width: 100%; }
   .turn { grid-area: turn; }
   .ledger-head { padding-bottom: 2px; }
   .ledger-count { display: inline; }
-  .presence-label { display: none; }
 
   .player-list {
     display: flex;
@@ -835,13 +763,6 @@ img { display: block; max-width: 100%; }
   .player-name { font-size: 11.5px; }
   .player-meta { gap: 6px; }
   .player-score .score { font-size: 13px; }
-
-  .invite-row {
-    flex: 0 0 150px;
-    min-height: 52px;
-    margin-top: 0;
-    border: 1px dashed var(--border);
-  }
 
   .ledger-divider,
   .log-head,
@@ -870,12 +791,10 @@ img { display: block; max-width: 100%; }
 
 @media (max-width: 720px) {
   .app { padding: 0 16px; }
-  .room-header { min-height: 60px; gap: 12px; }
+  .game-header { min-height: 60px; gap: 12px; }
   .wordmark { font-size: 20px; }
-  .brand-divider, .preview-tag, .presence-label { display: none; }
+  .game-mode { display: none; }
   .brand { gap: 10px; }
-  .room-chip { height: 28px; }
-  .avatar-sm { width: 24px; height: 24px; }
 
   .ledger { padding: 10px; }
   .ledger-head { padding: 0 2px; }
@@ -884,9 +803,8 @@ img { display: block; max-width: 100%; }
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
     mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
   }
-  .player-row, .invite-row { scroll-snap-align: start; }
+  .player-row { scroll-snap-align: start; }
   .player-row { flex-basis: 150px; }
-  .invite-row { flex-basis: 136px; }
 
   .table-head h2 { font-size: 18px; }
   .board-scroll { padding: 12px; }
@@ -907,8 +825,6 @@ img { display: block; max-width: 100%; }
 }
 
 @media (max-width: 400px) {
-  .avatar-stack { display: none; }
-  .room-code { font-size: 10.5px; }
   .turn { padding: 12px; }
   .tile-frame { width: 88px; }
   .tile-name { font-size: 11.5px; }
