@@ -1,28 +1,32 @@
-import { Check, Copy } from 'lucide-react'
+import { Moon, Sun } from 'lucide-react'
 import { playerAvatarInk, playerHex } from '../game'
 import type { Player } from '../game'
+import type { Theme } from '../theme'
 
 interface RoomHeaderProps {
   players: Player[]
-  roomCode: string
-  copied: boolean
-  onCopyInvite: () => void
+  theme: Theme
+  onToggleTheme: () => void
 }
 
-export default function RoomHeader({ players, roomCode, copied, onCopyInvite }: RoomHeaderProps) {
+export default function RoomHeader({
+  players,
+  theme,
+  onToggleTheme,
+}: RoomHeaderProps) {
   return (
     <header className="room-header">
       <div className="brand">
         <h1 className="wordmark">Carcassonne</h1>
-        <span className="brand-divider" aria-hidden="true" />
-        <button type="button" className="room-chip" onClick={onCopyInvite} aria-label="Copiar convite da sala">
-          <span className="room-chip-label">Sala</span>
-          <span className="room-code">{roomCode}</span>
-          {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
-        </button>
         <span className="preview-tag">Prévia local</span>
       </div>
       <div className="presence">
+        <button
+          type="button" className="theme-toggle" onClick={onToggleTheme}
+          aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
+        >
+          {theme === 'dark' ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
+        </button>
         <div className="avatar-stack" aria-hidden="true">
           {players.map((player) => (
             <span
@@ -35,7 +39,6 @@ export default function RoomHeader({ players, roomCode, copied, onCopyInvite }: 
         </div>
         <span className="presence-label">{players.length} de 5</span>
       </div>
-      <span className="sr-only" aria-live="polite">{copied ? 'Convite copiado' : ''}</span>
     </header>
   )
 }
