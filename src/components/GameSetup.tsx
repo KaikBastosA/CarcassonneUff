@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import { playerColors } from '../game'
 import { playerNames } from '../tiles'
 import type { MatchConfiguration, PlayerSettings } from '../game/session'
+import { difficultyNames } from '../game/strategy'
 
 interface GameSetupProps {
   configuration: MatchConfiguration
@@ -35,7 +36,7 @@ export default function GameSetup({ configuration, message, onStart }: GameSetup
     <section className="setup-screen" aria-label="Configurar partida">
       <form className="setup-card" onSubmit={submit}>
         <h2>Nova partida</h2>
-        <p>De 2 a 5 jogadores, todos neste dispositivo. Escolha os nomes, as cores e quem começa.</p>
+        <p>De 2 a 5 jogadores neste dispositivo. Escolha humanos ou IA, as cores e quem começa. Para observar uma partida automática, configure todos como IA.</p>
         <label>Quantidade de jogadores
           <select value={players.length} onChange={(event) => changeCount(Number(event.target.value))}>
             {[2, 3, 4, 5].map((count) => <option key={count} value={count}>{count}</option>)}
@@ -54,6 +55,20 @@ export default function GameSetup({ configuration, message, onStart }: GameSetup
                   disabled={players.some((item, position) => position !== index && item.color === color)}>{playerNames[color]}</option>)}
               </select>
             </label>
+            <label>Controle do jogador {index + 1}
+              <select value={player.control ?? 'human'} onChange={(event) => setPlayers((current) => current.map((item, position) =>
+                position === index ? { ...item, control: event.target.value as PlayerSettings['control'] } : item))}>
+                <option value="human">Humano</option>
+                <option value="computer">IA</option>
+              </select>
+            </label>
+            {player.control === 'computer' && <label>Dificuldade do jogador {index + 1}
+              <select value={player.difficulty ?? 'basic'} onChange={(event) => setPlayers((current) => current.map((item, position) =>
+                position === index ? { ...item, difficulty: event.target.value as PlayerSettings['difficulty'] } : item))}>
+                <option value="basic">{difficultyNames.basic}</option>
+                <option value="strategic">{difficultyNames.strategic}</option>
+              </select>
+            </label>}
           </div>)}
         </div>
         <label>Quem começa

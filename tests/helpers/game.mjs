@@ -3,6 +3,7 @@ import { Position } from '../../src/game/position.ts'
 import { TileInstance } from '../../src/game/tiles.ts'
 import { createFollowers } from '../../src/game/followers.ts'
 import { StructureMesh } from '../../src/game/mesh.ts'
+import { playerStrategies } from '../../src/game/strategy.ts'
 const kinds = [
   'city-sides',
   'curve',
@@ -25,11 +26,11 @@ const kinds = [
 ]
 
 export const initialPlayers = [
-  { id: 'you', name: 'Você', color: 'blue', score: 0, meeples: 7, followers: createFollowers('you'), local: true },
-  { id: 'ana', name: 'Ana', color: 'red', score: 0, meeples: 7, followers: createFollowers('ana'), local: false },
-  { id: 'bruno', name: 'Bruno', color: 'yellow', score: 0, meeples: 7, followers: createFollowers('bruno'), local: false },
-  { id: 'carla', name: 'Carla', color: 'black', score: 0, meeples: 7, followers: createFollowers('carla'), local: false },
-]
+  { id: 'you', name: 'Você', color: 'blue', score: 0, meeples: 7, followers: createFollowers('you') },
+  { id: 'ana', name: 'Ana', color: 'red', score: 0, meeples: 7, followers: createFollowers('ana') },
+  { id: 'bruno', name: 'Bruno', color: 'yellow', score: 0, meeples: 7, followers: createFollowers('bruno') },
+  { id: 'carla', name: 'Carla', color: 'black', score: 0, meeples: 7, followers: createFollowers('carla') },
+].map((player) => ({ ...player, strategy: playerStrategies.human }))
 
 export const initialActivity = []
 

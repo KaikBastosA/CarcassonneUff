@@ -6,7 +6,7 @@ bun install
 bun dev
 ```
 
-Abra o endereço exibido pelo Vite. Configure de 2 a 5 jogadores locais, com nomes e cores diferentes, e escolha quem começa. Cada turno permite posicionar a peça comprada, escolher um seguidor opcional e confirmar. A colocação pode ser desfeita antes da confirmação.
+Abra o endereço exibido pelo Vite. Configure de 2 a 5 jogadores locais, com nomes e cores diferentes, escolha o controle **Humano** ou **IA** de cada um e quem começa. A mesa pode conter somente IAs para observar seus comportamentos. Nos turnos humanos, posicione a peça comprada, escolha um seguidor opcional e confirme. A colocação pode ser desfeita antes da confirmação.
 
 A partida usa 72 cartelas distribuídas entre os 12 modelos disponíveis, com quantidades próprias do projeto. Uma cartela inicial é reservada e as outras 71 são embaralhadas. Peças sem encaixe em nenhuma orientação são descartadas automaticamente; ao esgotar a pilha, ocorre a apuração final. O botão **Nova partida** retorna à configuração. A sessão fica na memória do navegador; recarregar a página volta à configuração.
 
@@ -18,7 +18,20 @@ bun run check
 bun run build
 ```
 
-A IA e o modo em rede ainda não estão implementados.
+## Humanos e IA
+
+Para jogar com dois humanos contra uma IA, escolha 3 jogadores e defina os controles como **Humano**, **Humano** e **IA**. Os humanos compartilham este dispositivo. A IA executa seu turno automaticamente, incluindo rotação, posição e seguidor opcional. Durante o cálculo, o painel mostra **IA pensando…** e as ações da jogada ficam bloqueadas. **Nova partida** continua disponível e cancela o cálculo anterior.
+
+Cada jogador controlado por IA possui uma seleção de dificuldade:
+
+- **Básico:** avalia a jogada atual, considerando encaixes, pontuação, maiorias, adversários e reserva de seguidores.
+- **Estratégico:** compara quatro decisões promissoras em dois cenários de compras futuras, simulando as respostas dos adversários até a próxima vez da própria IA. Também estima o potencial de campos próximos a cidades ainda incompletas. A busca é limitada e não garante a melhor jogada ou vitória.
+
+Para **IA vs IA**, configure todos os participantes como **IA**, escolha o nível de cada um e inicie. A partida avança automaticamente até o resultado final. É possível observar, navegar pelo tabuleiro ou usar **Nova partida** durante a execução.
+
+Os níveis usam as mesmas regras e não conhecem a ordem futura da pilha. O estratégico estima as cartelas desconhecidas pelo catálogo, descontando as peças colocadas, a compra atual e os descartes públicos. Os adversários simulados usam a política básica. O cálculo ocorre em um Web Worker. Se ele falhar ou exceder 10 segundos, a partida usa uma jogada legal sem seguidor para continuar. **Nova partida** preserva a dificuldade escolhida de cada IA.
+
+O modo em rede e a persistência ainda não estão implementados.
 
 O catálogo inclui três cartelas com brasão: duas Cidades em curva e uma Cidade fechada, dentro do total de 72. Cada brasão acrescenta 2 pontos à cidade completa ou 1 ponto à cidade incompleta na apuração final. O símbolo acompanha a rotação e permanece na cartela após a devolução dos seguidores.
 

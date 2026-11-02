@@ -1,9 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { GameSession } from './game/session'
 import type { MatchConfiguration } from './game/session'
+import { applyComputerDecision, scheduleComputerTurn } from './game/computer-turn'
 
 export function useGame() {
   const [match, setMatch] = useState(() => GameSession.configure())
+
+  useEffect(() => scheduleComputerTurn(match, (decision) => {
+    setMatch((current) => applyComputerDecision(current, match, decision))
+  }), [match])
 
   function start(configuration: MatchConfiguration) {
     const config = { ...configuration, seed: configuration.seed ?? Math.floor(Math.random() * 4294967296) }

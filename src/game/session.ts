@@ -1,17 +1,22 @@
 import { playerColors } from '../game.ts'
 import type { GameState, Player } from '../game.ts'
 import type { PlayerColor, Rotation } from '../tiles.ts'
-import { confirmGameTurn, placeGameTile, selectGameFollower, undoGamePlacement } from './actions.ts'
+import { confirmGameTurn, getFollowerChoices, placeGameTile, selectGameFollower, undoGamePlacement } from './actions.ts'
 import { GameBoard } from './board.ts'
 import { createGameTiles, drawPlayableTile } from './deck.ts'
 import { createFollowers } from './followers.ts'
 import { StructureMesh } from './mesh.ts'
 import { Position } from './position.ts'
 import { finalizeGame } from './scoring.ts'
+import { computerStrategies, playerStrategies } from './strategy.ts'
+import type { ComputerDifficulty, PlayerControl, TurnDecision } from './strategy.ts'
+import { rotations } from './tiles.ts'
 
 export interface PlayerSettings {
   readonly name: string
   readonly color: PlayerColor
+  readonly control?: PlayerControl
+  readonly difficulty?: ComputerDifficulty
 }
 
 export interface MatchConfiguration {
@@ -27,7 +32,9 @@ export const defaultConfiguration: MatchConfiguration = Object.freeze({
 
 function validatedConfiguration(config: MatchConfiguration): MatchConfiguration {
   if (config.players.length < 2 || config.players.length > 5) throw new Error('Configure entre 2 e 5 jogadores.')
-  const players = config.players.map(({ name, color }) => Object.freeze({ name: name.trim(), color }))
+  const players = config.players.map(({ name, color, control = 'human', difficulty = 'basic' }) => Object.freeze({ name: name.trim(), color, control, difficulty }))
+  if (players.some(({ control }) => control !== 'human' && control !== 'computer')) throw new Error('Controle de jogador inválido.')
+  if (players.some(({ difficulty }) => difficulty !== 'basic' && difficulty !== 'strategic')) throw new Error('Dificuldade de IA inválida.')
   if (players.some(({ name }) => !name || name.length > 30)) throw new Error('Use nomes de 1 a 30 caracteres.')
   if (players.some(({ color }) => !playerColors.includes(color))) throw new Error('Cor de jogador inválida.')
   if (new Set(players.map(({ color }) => color)).size !== players.length) throw new Error('Escolha uma cor diferente para cada jogador.')
@@ -42,8 +49,9 @@ function validatedConfiguration(config: MatchConfiguration): MatchConfiguration 
 }
 
 function createPlayers(config: MatchConfiguration): readonly Player[] {
-  return config.players.map(({ name, color }, index) => ({
-    id: `player-${color}`, name, color, local: index === 0, score: 0, meeples: 7,
+  return config.players.map(({ name, color, control = 'human', difficulty = 'basic' }) => ({
+    id: `player-${color}`, name, color, score: 0, meeples: 7,
+    strategy: control === 'computer' ? computerStrategies[difficulty] : playerStrategies.human,
     followers: createFollowers(`player-${color}`),
   }))
 }
@@ -175,11 +183,33 @@ export class GameSession {
   }
 
   start(configuration: MatchConfiguration = this.configuration): GameSession { return this.state.start(this, configuration) }
-  place(position: string): GameSession { return this.state.place(this, position) }
-  selectFollower(regionId: string | null): GameSession { return this.state.selectFollower(this, regionId) }
-  undo(): GameSession { return this.state.undo(this) }
-  rotate(direction: -1 | 1): GameSession { return this.state.rotate(this, direction) }
-  confirm(): GameSession { return this.state.confirm(this) }
+  get computerTurn(): boolean {
+    return this.snapshot.phase === 'place' && this.snapshot.players[this.snapshot.currentPlayerIndex].strategy.automatic
+  }
+
+  get humanTurn(): boolean {
+    return !this.snapshot.players[this.snapshot.currentPlayerIndex].strategy.automatic
+  }
+
+  place(position: string): GameSession { return this.humanTurn ? this.state.place(this, position) : this }
+  selectFollower(regionId: string | null): GameSession { return this.humanTurn ? this.state.selectFollower(this, regionId) : this }
+  undo(): GameSession { return this.humanTurn ? this.state.undo(this) : this }
+  rotate(direction: -1 | 1): GameSession { return this.humanTurn ? this.state.rotate(this, direction) : this }
+  confirm(): GameSession { return this.humanTurn ? this.state.confirm(this) : this }
+
+  playComputerTurn(decision: TurnDecision | null): GameSession {
+    if (!this.computerTurn || !decision || decision.tileId !== this.snapshot.deck[this.snapshot.deckIndex]?.id
+      || !rotations.includes(decision.rotation) || typeof decision.position !== 'string'
+      || (decision.regionId !== null && typeof decision.regionId !== 'string')) return this
+    let next = this.withSnapshot({ ...this.snapshot, rotation: decision.rotation })
+    next = next.state.place(next, decision.position)
+    if (next.snapshot.phase !== 'meeple') return this
+    if (decision.regionId !== null) {
+      if (!getFollowerChoices(next.snapshot).some((choice) => choice.id === decision.regionId && choice.available)) return this
+      next = next.state.selectFollower(next, decision.regionId)
+    }
+    return next.state.confirm(next)
+  }
 
   newGame(): GameSession {
     return GameSession.configure({ ...this.configuration, seed: undefined })

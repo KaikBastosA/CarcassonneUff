@@ -19,15 +19,16 @@ export default function App() {
     document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
   ))
   const player = state.players[state.currentPlayerIndex]
+  const automatic = player.strategy.automatic
   const pendingTile = state.pendingPosition ? state.board[state.pendingPosition] : undefined
   const followerChoices = getFollowerChoices(state)
   const drawn = state.deck[state.deckIndex]
-  const preview: PlacedTile | null = state.phase === 'place' && drawn
+  const preview: PlacedTile | null = state.phase === 'place' && drawn && !automatic
     ? { kind: drawn.kind, rotation: state.rotation, variant: drawn.variant }
     : null
   const { validPositions, unfillablePositions, warnings } = useMemo(() => {
     const unfillablePositions = state.model.getUnfillablePositions()
-    if (!drawn || state.phase !== 'place') return { validPositions: [], unfillablePositions, warnings: new Map() }
+    if (!drawn || state.phase !== 'place' || automatic) return { validPositions: [], unfillablePositions, warnings: new Map() }
     const tile = new TileInstance(drawn.id, drawn.kind, state.rotation, drawn.variant)
     const validPositions = state.model.getValidPositions(tile)
     const warnings = new Map(validPositions.flatMap((position) => {
@@ -35,7 +36,7 @@ export default function App() {
       return affected.length > 0 ? [[position.key, affected] as const] : []
     }))
     return { validPositions, unfillablePositions, warnings }
-  }, [state.model, drawn, state.rotation, state.phase])
+  }, [state.model, drawn, state.rotation, state.phase, automatic])
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -53,6 +54,7 @@ export default function App() {
   }
 
   function handleCell(position: string, regionId?: string) {
+    if (automatic) return
     if (state.phase === 'place') {
       place(position)
       return
@@ -78,11 +80,11 @@ export default function App() {
         preview={preview}
         pendingPosition={state.pendingPosition}
         pendingColor={playerHex[player.color]}
-        placing={state.phase === 'place'}
+        placing={state.phase === 'place' && !automatic}
         validPositions={validPositions}
         unfillablePositions={unfillablePositions}
         warnings={warnings}
-        followerChoices={followerChoices}
+        followerChoices={automatic ? [] : followerChoices}
         theme={theme}
         onCellClick={handleCell}
       />
@@ -116,7 +118,7 @@ export default function App() {
         onUndo={undoPlacement}
         onConfirm={confirm}
       />
-      <p className="app-note">Projeto de Software · UFF<br />Prévia local · rede e IA em desenvolvimento</p>
+      <p className="app-note">Projeto de Software · UFF<br />Partida local · humanos e IA</p>
     </main>
   )
 }
