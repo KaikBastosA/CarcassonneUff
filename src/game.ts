@@ -48,8 +48,6 @@ export interface GameState {
   activity: readonly GameEvent[]
 }
 
-export const roomCode = '7K2F'
-
 export const playerColors: readonly PlayerColor[] = Object.freeze(['blue', 'red', 'yellow', 'black', 'green'])
 
 export const playerHex: Record<PlayerColor, string> = {

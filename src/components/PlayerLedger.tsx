@@ -1,4 +1,3 @@
-import { Check, Plus } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import { playerAvatarInk, playerHex } from '../game'
 import type { GameEvent, Player } from '../game'
@@ -10,18 +9,16 @@ interface PlayerLedgerProps {
   currentPlayerId: string
   activity: readonly GameEvent[]
   round: number
-  copied: boolean
-  onCopyInvite: () => void
 }
 
-export default function PlayerLedger({ players, currentPlayerId, activity, round, copied, onCopyInvite }: PlayerLedgerProps) {
+export default function PlayerLedger({ players, currentPlayerId, activity, round }: PlayerLedgerProps) {
   const playersById = new Map(players.map((player) => [player.id, player]))
 
   return (
     <aside className="ledger" aria-label="Jogadores e histórico">
       <div className="ledger-head">
         <h2>Jogadores</h2>
-        <span className="ledger-count">{players.length} de 5</span>
+        <span className="ledger-count">{players.length} jogadores</span>
       </div>
       <div className="player-list">
         {players.map((player) => {
@@ -52,10 +49,6 @@ export default function PlayerLedger({ players, currentPlayerId, activity, round
             </div>
           )
         })}
-        <button type="button" className="invite-row" onClick={onCopyInvite}>
-          {copied ? <Check size={15} aria-hidden="true" /> : <Plus size={15} aria-hidden="true" />}
-          <span>{copied ? 'Convite copiado' : 'Convidar jogador'}</span>
-        </button>
       </div>
       <div className="ledger-divider" />
       <div className="log-head">

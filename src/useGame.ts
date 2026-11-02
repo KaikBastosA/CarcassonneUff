@@ -1,43 +1,18 @@
-import { useEffect, useState } from 'react'
-import { GameSession } from './game/session'
-import type { MatchConfiguration } from './game/session'
-import { applyComputerDecision, scheduleComputerTurn } from './game/computer-turn'
+import { useEffect, useState, useSyncExternalStore } from 'react'
+import { scheduleComputerTurn } from './game/computer-turn'
+import { GameStore } from './game/store'
 
 export function useGame() {
-  const [match, setMatch] = useState(() => GameSession.configure())
+  const [store] = useState(() => new GameStore())
+  const match = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
 
   useEffect(() => scheduleComputerTurn(match, (decision) => {
-    setMatch((current) => applyComputerDecision(current, match, decision))
-  }), [match])
+    store.playComputerTurn(match, decision)
+  }), [store, match])
 
-  function start(configuration: MatchConfiguration) {
-    const config = { ...configuration, seed: configuration.seed ?? Math.floor(Math.random() * 4294967296) }
-    setMatch((current) => current.start(config))
+  return {
+    state: match.snapshot, configuration: match.configuration,
+    start: store.start, rotate: store.rotate, place: store.place, selectFollower: store.selectFollower,
+    undoPlacement: store.undoPlacement, confirm: store.confirm, newGame: store.newGame,
   }
-
-  function rotate(direction: -1 | 1) {
-    setMatch((current) => current.rotate(direction))
-  }
-
-  function place(position: string) {
-    setMatch((current) => current.place(position))
-  }
-
-  function selectFollower(regionId: string | null) {
-    setMatch((current) => current.selectFollower(regionId))
-  }
-
-  function undoPlacement() {
-    setMatch((current) => current.undo())
-  }
-
-  function confirm() {
-    setMatch((current) => current.confirm())
-  }
-
-  function newGame() {
-    setMatch((current) => current.newGame())
-  }
-
-  return { state: match.snapshot, configuration: match.configuration, start, rotate, place, selectFollower, undoPlacement, confirm, newGame }
 }
