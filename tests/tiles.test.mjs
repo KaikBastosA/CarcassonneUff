@@ -124,7 +124,8 @@ test('o conjunto contém 72 exemplares únicos nas quantidades do catálogo', ()
   for (const kind of tileKinds) {
     assert.equal(tiles.filter((tile) => tile.kind === kind).length, tileCatalog[kind].quantity)
   }
-  assert.ok(tiles.every((tile) => tile.rotation === 0 && tile.shields === 0))
+  assert.ok(tiles.every((tile) => tile.rotation === 0))
+  assert.equal(tiles.reduce((total, tile) => total + tile.shields, 0), 3)
   const anotherSet = createTileSet()
   assert.notEqual(tiles[0], anotherSet[0])
   assert.deepEqual(tiles, anotherSet)

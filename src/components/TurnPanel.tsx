@@ -4,7 +4,7 @@ import { playerHex } from '../game'
 import type { GamePhase, Player } from '../game'
 import { terrainNames, tileNames } from '../tiles'
 import type { FollowerChoice } from '../game/actions'
-import type { Rotation, TileKind } from '../tiles'
+import type { Rotation, TileKind, TileVariant } from '../tiles'
 import Meeple from './Meeple'
 import Tile from './Tile'
 
@@ -12,8 +12,10 @@ interface TurnPanelProps {
   player: Player
   phase: GamePhase
   kind: TileKind
+  variant?: TileVariant
   rotation: Rotation
   deckCount: number
+  discardedCount: number
   pendingMeeple: boolean
   followerChoices: readonly FollowerChoice[]
   message: string
@@ -31,8 +33,10 @@ export default function TurnPanel({
   player,
   phase,
   kind,
+  variant = 'plain',
   rotation,
   deckCount,
+  discardedCount,
   pendingMeeple,
   followerChoices,
   message,
@@ -74,7 +78,7 @@ export default function TurnPanel({
       <div className="tile-tray">
         <div className="tile-frame">
           <div className="region-preview">
-            <Tile kind={kind} rotation={rotation} />
+            <Tile kind={kind} rotation={rotation} variant={variant} />
             {followerChoices.map((choice, index) => <span key={choice.id} className="region-number" aria-hidden="true"
               style={{ left: `${choice.anchor.x * 100}%`, top: `${choice.anchor.y * 100}%` }}>{index + 1}</span>)}
           </div>
@@ -82,7 +86,7 @@ export default function TurnPanel({
         <div className="tile-details">
           <div>
             <div className="tile-kicker">Peça atual</div>
-            <div className="tile-name">{tileNames[kind]}</div>
+            <div className="tile-name">{tileNames[kind]}{variant === 'shield' ? ' com brasão' : ''}</div>
           </div>
           <div className="rotation-row">
             <button
@@ -148,7 +152,7 @@ export default function TurnPanel({
 
       <div className="deck-row">
         <Layers size={14} aria-hidden="true" />
-        <span>{deckCount} peças restantes</span>
+        <span>{deckCount} peças na pilha · {discardedCount} descartadas</span>
       </div>
     </section>
   )

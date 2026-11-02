@@ -25,6 +25,7 @@ export const ports = [
 export type TileKind = (typeof tileKinds)[number]
 export type Side = (typeof sides)[number]
 export type Rotation = (typeof rotations)[number]
+export type TileVariant = 'plain' | 'shield'
 export type Port = (typeof ports)[number]
 export type Terrain = 'city' | 'road' | 'field' | 'monastery'
 
@@ -48,6 +49,11 @@ export interface TileDefinition {
   readonly imageRotations: number
   readonly quantity: number
   readonly regions: readonly TileRegion[]
+  readonly shieldVariant?: {
+    readonly quantity: number
+    readonly regionId: string
+    readonly anchor: RegionPoint
+  }
 }
 
 function region(id: string, terrain: Terrain, connections: readonly Port[], adjacentCities: readonly string[], anchor: RegionPoint): TileRegion {
@@ -64,6 +70,7 @@ export const tileCatalog: Readonly<Record<TileKind, TileDefinition>> = {
   },
   'city-corner': {
     name: 'Cidade em curva', source: 'CastleEdge', imageRotations: 4, quantity: 8,
+    shieldVariant: { quantity: 2, regionId: 'city', anchor: { x: 0.86, y: 0.52 } },
     regions: [
       region('city', 'city', ports.slice(0, 6), [], { x: 0.72, y: 0.24 }),
       region('field', 'field', ports.slice(6), ['city'], { x: 0.25, y: 0.75 }),
@@ -79,6 +86,7 @@ export const tileCatalog: Readonly<Record<TileKind, TileDefinition>> = {
   },
   'city-center': {
     name: 'Cidade fechada', source: 'CastleCenter', imageRotations: 1, quantity: 1,
+    shieldVariant: { quantity: 1, regionId: 'city', anchor: { x: 0.76, y: 0.28 } },
     regions: [region('city', 'city', ports, [], { x: 0.5, y: 0.5 })],
   },
   'city-road': {
@@ -149,6 +157,10 @@ export const tileCatalog: Readonly<Record<TileKind, TileDefinition>> = {
 }
 
 function freezeDefinition(definition: TileDefinition) {
+  if (definition.shieldVariant) {
+    Object.freeze(definition.shieldVariant.anchor)
+    Object.freeze(definition.shieldVariant)
+  }
   for (const region of definition.regions) {
     Object.freeze(region.anchor)
     Object.freeze(region.ports)
@@ -181,24 +193,33 @@ export class TileInstance {
   readonly id: string
   readonly kind: TileKind
   readonly rotation: Rotation
+  readonly variant: TileVariant
 
-  constructor(id: string, kind: TileKind, rotation: Rotation = 0) {
+  constructor(id: string, kind: TileKind, rotation: Rotation = 0, variant: TileVariant = 'plain') {
+    if (variant === 'shield' && !tileCatalog[kind].shieldVariant) throw new Error('Este modelo não possui variante com brasão.')
     this.id = id
     this.kind = kind
     this.rotation = rotation
+    this.variant = variant
     Object.freeze(this)
   }
 
   get regions(): readonly TileRegion[] {
     return tileCatalog[this.kind].regions.map((region) => ({
       ...region,
+      shields: region.shields + (this.variant === 'shield' && region.id === tileCatalog[this.kind].shieldVariant?.regionId ? 1 : 0),
       anchor: rotatePoint(region.anchor, this.rotation),
       ports: region.ports.map((port) => rotatePort(port, this.rotation)),
     }))
   }
 
   get shields(): number {
-    return tileCatalog[this.kind].regions.reduce((total, region) => total + region.shields, 0)
+    return tileCatalog[this.kind].regions.reduce((total, region) => total + region.shields, this.variant === 'shield' ? 1 : 0)
+  }
+
+  get shieldMarkers(): readonly RegionPoint[] {
+    const shield = tileCatalog[this.kind].shieldVariant
+    return this.variant === 'shield' && shield ? [rotatePoint(shield.anchor, this.rotation)] : []
   }
 
   terrainAt(side: Side): Terrain {
@@ -207,13 +228,14 @@ export class TileInstance {
   }
 
   rotate(): TileInstance {
-    return new TileInstance(this.id, this.kind, ((this.rotation + 90) % 360) as Rotation)
+    return new TileInstance(this.id, this.kind, ((this.rotation + 90) % 360) as Rotation, this.variant)
   }
 }
 
 export function createTileSet(): TileInstance[] {
   return tileKinds.flatMap((kind) => Array.from(
     { length: tileCatalog[kind].quantity },
-    (_, index) => new TileInstance(`${kind}-${index + 1}`, kind),
+    (_, index) => new TileInstance(`${kind}-${index + 1}`, kind, 0,
+      index >= tileCatalog[kind].quantity - (tileCatalog[kind].shieldVariant?.quantity ?? 0) ? 'shield' : 'plain'),
   ))
 }

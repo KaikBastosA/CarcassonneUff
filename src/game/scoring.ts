@@ -70,7 +70,7 @@ export function applyScores(current: GameState, records: readonly ScoringRecord[
   })
   const board = { ...current.board }
   for (const { tile, position } of current.model.placements) {
-    if (releasedTiles.has(tile.id)) board[position.key] = { kind: tile.kind, rotation: tile.rotation }
+    if (releasedTiles.has(tile.id)) board[position.key] = { kind: tile.kind, rotation: tile.rotation, variant: tile.variant }
   }
   return {
     ...current, players, board,

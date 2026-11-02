@@ -1,9 +1,10 @@
 import { tileCatalog, tileKinds } from './game/tiles'
-import type { TileKind, Rotation, Terrain } from './game/tiles'
+import type { TileKind, Rotation, Terrain, TileVariant } from './game/tiles'
+import shieldImage from './assets/coat-of-arms.svg'
 
-export { tileCatalog, tileKinds }
-export type { TileKind, Rotation }
-export type PlayerColor = 'blue' | 'red' | 'yellow' | 'black'
+export { shieldImage, tileCatalog, tileKinds }
+export type { TileKind, Rotation, TileVariant }
+export type PlayerColor = 'blue' | 'red' | 'yellow' | 'black' | 'green'
 
 export const terrainNames: Record<Terrain, string> = {
   city: 'Cidade', road: 'Estrada', field: 'Campo', monastery: 'Mosteiro',
@@ -18,11 +19,13 @@ export const playerNames: Record<PlayerColor, string> = {
   red: 'Vermelho',
   yellow: 'Amarelo',
   black: 'Preto',
+  green: 'Verde',
 }
 
 export interface PlacedTile {
   kind: TileKind
   rotation: Rotation
+  variant?: TileVariant
   meeple?: PlayerColor
   meepleRegion?: string
 }

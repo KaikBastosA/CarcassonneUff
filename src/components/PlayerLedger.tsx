@@ -5,9 +5,9 @@ import type { GameEvent, Player } from '../game'
 import Meeple from './Meeple'
 
 interface PlayerLedgerProps {
-  players: Player[]
+  players: readonly Player[]
   currentPlayerId: string
-  activity: GameEvent[]
+  activity: readonly GameEvent[]
   round: number
   copied: boolean
   onCopyInvite: () => void

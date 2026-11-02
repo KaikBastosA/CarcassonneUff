@@ -396,3 +396,17 @@ body {
 
 .final-standings { list-style: none; padding: 0; display: grid; gap: 10px; }
 .final-standings li { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+
+.setup-screen { position: fixed; inset: 0; overflow: auto; padding: 108px 20px 32px; display: grid; justify-items: center; align-items: start; }
+.setup-card { width: min(100%, 600px); display: grid; gap: 18px; padding: 28px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-md); }
+.setup-card h2 { margin: 0; font-size: 23px; }
+.setup-card p { font-size: 13px; color: var(--ink-secondary); line-height: 1.6; }
+.setup-card label { display: grid; gap: 7px; font-size: 12px; }
+.setup-card input, .setup-card select { min-width: 0; min-height: 40px; padding: 8px 10px; font: inherit; color: var(--ink); background: var(--surface-raised); border: 1px solid var(--border-strong); border-radius: 5px; }
+.setup-players { display: grid; gap: 14px; }
+.setup-player { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.setup-card .setup-error { color: var(--accent); }
+.new-game-button { border: 1px solid var(--border); border-radius: 6px; background: var(--surface); padding: 7px 10px; color: var(--ink); font: inherit; font-size: 11px; }
+@media (max-width: 480px) { .setup-card { padding: 18px; } .setup-player { grid-template-columns: 1fr; } .presence-label { display: none; } }
+
+.tile-shield { position: absolute; width: 22%; height: 22%; pointer-events: none; filter: drop-shadow(0 1px 1px #0008); user-select: none; }

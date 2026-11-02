@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { initialGame } from '../src/game.ts'
-import { confirmGameTurn, getFollowerChoices, placeGameTile, selectGameFollower, undoGamePlacement } from '../src/game/actions.ts'
+import { initialGame, withTile } from './helpers/game.mjs'
+import { confirmGameTurn as settleTurn, getFollowerChoices, placeGameTile, selectGameFollower, undoGamePlacement } from '../src/game/actions.ts'
 import { GameBoard } from '../src/game/board.ts'
 import { StructureMesh } from '../src/game/mesh.ts'
 import { Position } from '../src/game/position.ts'
 import { applyScores, calculateScores, determineWinners, finalizeGame } from '../src/game/scoring.ts'
 import { City } from '../src/game/structures.ts'
 import { TileInstance } from '../src/game/tiles.ts'
+
+function confirmGameTurn(state) { return finalizeGame(settleTurn(state)) }
 
 function gameOf(placements, allocations = [], pending = false) {
   let model = new GameBoard()
@@ -26,12 +28,14 @@ function gameOf(placements, allocations = [], pending = false) {
   }
   for (const player of players) player.meeples = player.followers.filter((follower) => follower.status === 'reserve').length
   const [x, y, currentKind, rotation = 0] = placements.at(-1)
-  return {
-    ...initialGame, players, board, model,
+  const deck = [...initialGame.deck]
+  deck[0] = new TileInstance(`${x},${y}`, currentKind)
+  return withTile({
+    ...initialGame, players, board, model, deck,
     mesh: new StructureMesh(model, players.flatMap((player) => player.followers)),
     phase: pending ? 'meeple' : 'place', pendingPosition: pending ? `${x},${y}` : null,
-    previousBoard: pending ? previousBoard : null, currentKind, rotation,
-  }
+    previousBoard: pending ? previousBoard : null,
+  }, currentKind, rotation)
 }
 
 const roadLoop = [[0, 0, 'curve', 270], [1, 0, 'curve'], [1, 1, 'curve', 90], [0, 1, 'curve', 180]]
@@ -92,7 +96,7 @@ test('campos pontuam apenas cidades completas e só na apuração final', () => 
 })
 
 test('confirmar pontua uma cidade e devolve o cavaleiro escolhido na própria jogada', () => {
-  const pending = selectGameFollower(placeGameTile({ ...initialGame, currentKind: 'city', rotation: 180 }, '0,-1'), 'city')
+  const pending = selectGameFollower(placeGameTile(withTile(initialGame, 'city', 180), '0,-1'), 'city')
   assert.equal(pending.players[0].score, 0)
   assert.equal(pending.players[0].meeples, 6)
   const confirmed = confirmGameTurn(pending)
@@ -108,7 +112,7 @@ test('confirmar pontua uma cidade e devolve o cavaleiro escolhido na própria jo
 })
 
 test('desfazer antes da confirmação não atribui pontos nem registra apuração', () => {
-  const pending = selectGameFollower(placeGameTile({ ...initialGame, currentKind: 'city', rotation: 180 }, '0,-1'), 'city')
+  const pending = selectGameFollower(placeGameTile(withTile(initialGame, 'city', 180), '0,-1'), 'city')
   const undone = undoGamePlacement(pending)
   assert.equal(undone.players[0].score, 0)
   assert.equal(undone.players[0].meeples, 7)
@@ -195,8 +199,8 @@ test('a cidade já pontuada continua contando para seu campo no fim, sem pontuar
 })
 
 test('a última jogada pontua completas antes da apuração final e bloqueia novas ações', () => {
-  const pending = selectGameFollower(placeGameTile({ ...initialGame, currentKind: 'city', rotation: 180 }, '0,-1'), 'city')
-  const final = confirmGameTurn({ ...pending, deck: ['city'] })
+  const pending = selectGameFollower(placeGameTile(withTile(initialGame, 'city', 180), '0,-1'), 'city')
+  const final = confirmGameTurn({ ...pending, deck: [pending.deck[0]] })
   assert.equal(final.phase, 'finished')
   assert.equal(final.players[0].score, 4)
   assert.equal(final.deckIndex, 1)
@@ -239,7 +243,7 @@ test('a primeira cidade dupla da sequência permite fechar e pontuar sua cidade 
   const confirmed = confirmGameTurn(pending)
   assert.equal(confirmed.players[0].score, 4)
   assert.equal(confirmed.players[0].meeples, 7)
-  assert.equal(confirmed.currentKind, 'curve')
+  assert.equal(confirmed.deck[confirmed.deckIndex].kind, 'curve')
   assert.equal(confirmed.board['0,-1'].meeple, undefined)
   const unfinished = confirmGameTurn(selectGameFollower(placeGameTile(initialGame, '0,-1'), 'city-north'))
   assert.equal(unfinished.players[0].score, 0)

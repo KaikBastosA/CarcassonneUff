@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { initialGame } from '../src/game.ts'
+import { initialGame, withTile } from './helpers/game.mjs'
 import { getFollowerChoices, placeGameTile, selectGameFollower, undoGamePlacement } from '../src/game/actions.ts'
 
 function pending(kind = 'road', rotation = 90, position = '1,0') {
-  return placeGameTile({ ...initialGame, currentKind: kind, rotation }, position)
+  return placeGameTile(withTile(initialGame, kind, rotation), position)
 }
 
 test('a reserva real começa com sete seguidores e substitui os dados fictícios do placar', () => {
@@ -64,10 +64,10 @@ test('seguidores só são selecionados na peça recém-jogada durante a etapa op
 
 test('uma estrutura ocupada à distância bloqueia seguidores de qualquer jogador', () => {
   const first = selectGameFollower(pending(), 'road')
-  const next = placeGameTile({
+  const next = placeGameTile(withTile({
     ...first, phase: 'place', pendingPosition: null, previousBoard: null,
-    currentPlayerIndex: 1, deckIndex: 1, currentKind: 'road', rotation: 90,
-  }, '2,0')
+    currentPlayerIndex: 1, deckIndex: 1,
+  }, 'road', 90), '2,0')
   assert.equal(next.phase, 'meeple')
   const option = getFollowerChoices(next).find((choice) => choice.id === 'road')
   assert.equal(option.available, false)

@@ -1,35 +1,38 @@
 import { useState } from 'react'
-import { initialGame } from './game'
-import { confirmGameTurn, placeGameTile, selectGameFollower, undoGamePlacement } from './game/actions'
-import type { GameState } from './game'
-import type { Rotation } from './tiles'
+import { GameSession } from './game/session'
+import type { MatchConfiguration } from './game/session'
 
 export function useGame() {
-  const [state, setState] = useState<GameState>(initialGame)
+  const [match, setMatch] = useState(() => GameSession.configure())
+
+  function start(configuration: MatchConfiguration) {
+    const config = { ...configuration, seed: configuration.seed ?? Math.floor(Math.random() * 4294967296) }
+    setMatch((current) => current.start(config))
+  }
 
   function rotate(direction: -1 | 1) {
-    setState((current) => {
-      if (current.phase !== 'place') return current
-      const rotation = ((current.rotation + direction * 90 + 360) % 360) as Rotation
-      return { ...current, rotation, message: '' }
-    })
+    setMatch((current) => current.rotate(direction))
   }
 
   function place(position: string) {
-    setState((current) => placeGameTile(current, position))
+    setMatch((current) => current.place(position))
   }
 
   function selectFollower(regionId: string | null) {
-    setState((current) => selectGameFollower(current, regionId))
+    setMatch((current) => current.selectFollower(regionId))
   }
 
   function undoPlacement() {
-    setState(undoGamePlacement)
+    setMatch((current) => current.undo())
   }
 
   function confirm() {
-    setState(confirmGameTurn)
+    setMatch((current) => current.confirm())
   }
 
-  return { state, rotate, place, selectFollower, undoPlacement, confirm }
+  function newGame() {
+    setMatch((current) => current.newGame())
+  }
+
+  return { state: match.snapshot, configuration: match.configuration, start, rotate, place, selectFollower, undoPlacement, confirm, newGame }
 }
