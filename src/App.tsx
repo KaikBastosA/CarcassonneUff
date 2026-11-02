@@ -2,40 +2,59 @@ import { useState } from 'react'
 import Board from './components/Board'
 import Meeple from './components/Meeple'
 import Tile from './components/Tile'
-import { initialBoard, playerNames, tileKinds, tileNames } from './tiles'
-import type { BoardState, PlayerColor, Rotation, TileKind } from './tiles'
+import { GameBoard, placementMessages } from './game/board'
+import { Position } from './game/position'
+import { TileInstance } from './game/tiles'
+import { playerNames, tileKinds, tileNames } from './tiles'
+import type { PlayerColor, Rotation, TileKind } from './tiles'
 
-type Tool = 'tile' | 'meeple' | 'erase'
+type Tool = 'tile' | 'meeple'
+interface BoardSnapshot {
+  board: GameBoard
+  meeples: Readonly<Record<string, PlayerColor>>
+}
+
+const initialSnapshot: BoardSnapshot = {
+  board: new GameBoard().place(new TileInstance('start', 'city-road'), new Position(0, 0)),
+  meeples: {},
+}
 const playerColors: PlayerColor[] = ['blue', 'red', 'yellow', 'black']
 
 export default function App() {
-  const [history, setHistory] = useState<BoardState[]>([initialBoard])
+  const [history, setHistory] = useState<BoardSnapshot[]>([initialSnapshot])
   const [kind, setKind] = useState<TileKind>('road')
   const [rotation, setRotation] = useState<Rotation>(0)
   const [color, setColor] = useState<PlayerColor>('blue')
   const [tool, setTool] = useState<Tool>('tile')
-  const tiles = history[history.length - 1]
-  const count = Object.keys(tiles).length
+  const [message, setMessage] = useState('')
+  const snapshot = history[history.length - 1]
+  const { board, meeples } = snapshot
+  const selectedTile = new TileInstance('preview', kind, rotation)
+  const validPositions = board.getValidPositions(selectedTile)
+  const count = board.size
 
-  function save(next: BoardState) {
+  function save(next: BoardSnapshot) {
     setHistory((previous) => [...previous, next])
+    setMessage('')
   }
 
-  function editCell(position: string) {
-    const current = tiles[position]
+  function editCell(position: Position) {
+    const current = board.tileAt(position)
 
-    if (tool === 'erase') {
+    if (tool === 'meeple') {
       if (!current) return
-      const next = { ...tiles }
-      delete next[position]
-      save(next)
-    } else if (tool === 'meeple') {
-      if (!current) return
-      const meeple = current.meeple === color ? undefined : color
-      save({ ...tiles, [position]: { ...current, meeple } })
+      const next = { ...meeples }
+      if (next[position.key] === color) delete next[position.key]
+      else next[position.key] = color
+      save({ board, meeples: next })
     } else {
-      if (current) return
-      save({ ...tiles, [position]: { kind, rotation } })
+      const tile = new TileInstance(`tile-${position.key}`, kind, rotation)
+      const validation = board.validatePlacement(tile, position)
+      if (!validation.valid) {
+        setMessage(placementMessages[validation.reason])
+        return
+      }
+      save({ board: board.place(tile, position), meeples })
     }
   }
 
@@ -58,6 +77,7 @@ export default function App() {
                     setKind(tileKind)
                     setRotation(0)
                     setTool('tile')
+                    setMessage('')
                   }}>
                   <Tile kind={tileKind} rotation={0} />
                   <span>{tileNames[tileKind]}</span>
@@ -71,11 +91,11 @@ export default function App() {
                 <button type="button" onClick={() => {
                   setRotation((angle) => ((angle + 90) % 360) as Rotation)
                   setTool('tile')
+                  setMessage('')
                 }}>Girar peça ↻</button>
               </div>
             </div>
           </section>
-
           <section aria-labelledby="meeples-heading">
             <h2 id="meeples-heading">Meeples</h2>
             <div className="meeple-picker">
@@ -85,6 +105,7 @@ export default function App() {
                   onClick={() => {
                     setColor(playerColor)
                     setTool('meeple')
+                    setMessage('')
                   }}>
                   <Meeple color={playerColor} />
                 </button>
@@ -93,9 +114,6 @@ export default function App() {
             <p className="tool-help">Selecione uma cor e clique em uma peça.</p>
           </section>
 
-          <button type="button" className="erase-button" aria-pressed={tool === 'erase'} onClick={() => {
-            setTool('erase')
-          }}>Apagar peça</button>
         </aside>
 
         <section className="table" aria-label="Montagem do tabuleiro">
@@ -104,13 +122,18 @@ export default function App() {
             <div className="board-actions">
               <button type="button" disabled={history.length === 1} onClick={() => {
                 setHistory((previous) => previous.slice(0, -1))
+                setMessage('')
               }}>Desfazer</button>
-              <button type="button" disabled={count === 0} onClick={() => {
-                save({})
-              }}>Limpar</button>
+              <button type="button" onClick={() => {
+                save(initialSnapshot)
+              }}>Reiniciar</button>
             </div>
           </div>
-          <Board tiles={tiles} preview={tool === 'tile' ? { kind, rotation } : null} onCellClick={editCell} />
+          <p className="board-status" role="status">{message || (tool === 'tile'
+            ? `${validPositions.length} posições válidas para ${tileNames[kind]} a ${rotation}°. Gire a peça para testar outras orientações.`
+            : 'Meeples livres para teste: clique em uma peça para colocar ou remover a cor selecionada.')}</p>
+          <Board board={board} meeples={meeples} validPositions={validPositions}
+            preview={tool === 'tile' ? { kind, rotation } : null} onCellClick={editCell} />
         </section>
       </div>
 
