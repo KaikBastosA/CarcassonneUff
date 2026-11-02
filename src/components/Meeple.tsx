@@ -5,6 +5,10 @@ const meepleImages = Object.fromEntries(
   Object.entries(meepleModules).map(([path, source]) => [path.split('/').pop()?.replace('.webp', '') ?? '', source]),
 )
 
+export function meepleImage(color: PlayerColor) {
+  return meepleImages[`meeple_road_${color}`]
+}
+
 export default function Meeple({ color }: { color: PlayerColor }) {
-  return <img className="meeple" src={meepleImages[`meeple_road_${color}`]} alt="" aria-hidden="true" draggable={false} />
+  return <img className="meeple" src={meepleImage(color)} alt="" aria-hidden="true" draggable={false} />
 }

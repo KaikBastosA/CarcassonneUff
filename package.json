@@ -12,6 +12,7 @@
     "preview": "bun --bun vite preview"
   },
   "dependencies": {
+    "lucide-react": "^1.66.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

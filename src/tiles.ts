@@ -22,6 +22,8 @@ export interface PlacedTile {
   meeple?: PlayerColor
 }
 
+export type BoardState = Record<string, PlacedTile>
+
 const tileModules = import.meta.glob('./assets/pieces/*.webp', { eager: true, import: 'default' }) as Record<string, string>
 const tileImages = Object.fromEntries(
   Object.entries(tileModules).map(([path, source]) => [path.split('/').pop()?.replace('.webp', '') ?? '', source]),
