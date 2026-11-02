@@ -26,6 +26,23 @@ test('cada modelo cobre a borda inteira sem sobrepor regiões', () => {
   }
 })
 
+test('os pontos dos seguidores acompanham a rotação sem sair da região de seleção da peça', () => {
+  for (const kind of tileKinds) {
+    const original = new TileInstance('tile', kind)
+    for (const rotation of rotations) {
+      const tile = new TileInstance('tile', kind, rotation)
+      for (const [index, region] of tile.regions.entries()) {
+        let { x, y } = original.regions[index].anchor
+        for (let turn = 0; turn < rotation / 90; turn++) [x, y] = [1 - y, x]
+        assert.deepEqual(region.anchor, { x, y })
+        assert.ok(x > 0 && x < 1 && y > 0 && y < 1)
+        assert.ok(Object.isFrozen(tileCatalog[kind].regions[index].anchor))
+      }
+      assert.equal(new Set(tile.regions.map(({ anchor }) => `${anchor.x},${anchor.y}`)).size, tile.regions.length)
+    }
+  }
+})
+
 test('as arestas de todas as orientações correspondem aos modelos visuais', () => {
   const expected = {
     city: ['city', 'field', 'field', 'field'],

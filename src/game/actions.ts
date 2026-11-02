@@ -2,9 +2,95 @@ import type { GameState } from '../game.ts'
 import { placementMessages } from './board.ts'
 import { Position } from './position.ts'
 import { TileInstance } from './tiles.ts'
+import type { RegionPoint, Terrain } from './tiles.ts'
+import type { Follower, FollowerRole } from './followers.ts'
+import { StructureMesh } from './mesh.ts'
+import { applyScores, calculateScores, finalizeGame } from './scoring.ts'
+
+export interface FollowerChoice {
+  readonly id: string
+  readonly terrain: Terrain
+  readonly role: FollowerRole
+  readonly anchor: RegionPoint
+  readonly available: boolean
+  readonly selected: boolean
+}
+
+function allFollowers(current: GameState): readonly Follower[] {
+  return current.players.flatMap((player) => player.followers)
+}
+
+function pendingTile(current: GameState): TileInstance | undefined {
+  const last = current.model.placements.at(-1)
+  return current.previousBoard && last?.position.key === current.pendingPosition ? last.tile : undefined
+}
+
+export function getFollowerChoices(current: GameState): readonly FollowerChoice[] {
+  if (current.phase !== 'meeple') return []
+  const tile = pendingTile(current)
+  if (!tile) return []
+  const player = current.players[current.currentPlayerIndex]
+  const selected = player.followers.find((follower) => follower.allocation?.tileId === tile.id)
+  const mesh = selected
+    ? new StructureMesh(current.model, allFollowers(current).filter((follower) => follower.id !== selected.id))
+    : current.mesh
+  const hasReserve = Boolean(selected) || player.followers.some((follower) => follower.status === 'reserve')
+  return tile.regions.map((region) => {
+    const structure = mesh.structureAt(tile.id, region.id)!
+    return {
+      id: region.id, terrain: region.terrain, role: structure.role, anchor: region.anchor,
+      available: hasReserve && structure.canOccupy(),
+      selected: selected?.allocation?.regionId === region.id,
+    }
+  })
+}
+
+export function selectGameFollower(current: GameState, regionId: string | null): GameState {
+  if (current.phase !== 'meeple') return current
+  const tile = pendingTile(current)
+  if (!tile || !current.pendingPosition) return current
+  const player = current.players[current.currentPlayerIndex]
+  const selected = player.followers.find((follower) => follower.allocation?.tileId === tile.id)
+  const followers = player.followers.map((follower) => follower === selected ? follower.release() : follower)
+  if (selected?.allocation?.regionId === regionId) regionId = null
+
+  if (regionId !== null) {
+    const free = selected
+      ? followers.find((follower) => follower.id === selected.id)
+      : followers.find((follower) => follower.status === 'reserve')
+    if (!free) return { ...current, message: 'Sem seguidores na reserva.' }
+    const mesh = new StructureMesh(current.model, [
+      ...current.players.filter((item) => item.id !== player.id).flatMap((item) => item.followers), ...followers,
+    ])
+    try {
+      const allocated = mesh.allocateFollower(free, tile.id, regionId)
+      followers[followers.indexOf(free)] = allocated
+    } catch (error) {
+      return { ...current, message: error instanceof Error ? error.message : 'Não foi possível colocar o seguidor.' }
+    }
+  }
+
+  const players = current.players.map((item) => item.id === player.id
+    ? { ...item, followers, meeples: followers.filter((follower) => follower.status === 'reserve').length }
+    : item)
+  const allocated = followers.find((follower) => follower.allocation?.tileId === tile.id)
+  return {
+    ...current, players,
+    board: {
+      ...current.board,
+      [current.pendingPosition]: {
+        kind: tile.kind, rotation: tile.rotation,
+        meeple: allocated ? player.color : undefined,
+        meepleRegion: allocated?.allocation?.regionId,
+      },
+    },
+    mesh: new StructureMesh(current.model, players.flatMap((item) => item.followers)),
+    message: '',
+  }
+}
 
 export function placeGameTile(current: GameState, key: string): GameState {
-  if (current.phase !== 'place') return current
+  if (current.phase !== 'place' || current.deckIndex >= current.deck.length) return current
   if (!/^-?\d+,-?\d+$/.test(key)) return { ...current, message: 'Posição inválida.' }
   const [x, y] = key.split(',').map(Number)
   if (!Number.isSafeInteger(x) || !Number.isSafeInteger(y)) return { ...current, message: 'Posição inválida.' }
@@ -14,10 +100,12 @@ export function placeGameTile(current: GameState, key: string): GameState {
   if (!validation.valid) return { ...current, message: placementMessages[validation.reason] }
 
   const affected = current.model.getNewUnfillablePositions(tile, position)
+  const model = current.model.place(tile, position)
   return {
     ...current,
     board: { ...current.board, [position.key]: { kind: tile.kind, rotation: tile.rotation } },
-    model: current.model.place(tile, position),
+    model,
+    mesh: new StructureMesh(model, allFollowers(current)),
     previousBoard: current.model,
     pendingPosition: position.key,
     phase: 'meeple',
@@ -31,20 +119,46 @@ export function undoGamePlacement(current: GameState): GameState {
   if (current.phase !== 'meeple' || !current.pendingPosition || !current.previousBoard) return current
   const tile = current.board[current.pendingPosition]
   if (!tile) return current
+  const instance = pendingTile(current)
+  if (!instance) return current
   const board = { ...current.board }
   delete board[current.pendingPosition]
-  const players = tile.meeple
-    ? current.players.map((player, index) => index === current.currentPlayerIndex
-      ? { ...player, meeples: player.meeples + 1 }
-      : player)
-    : current.players
+  const players = current.players.map((player) => {
+    const followers = player.followers.map((follower) => follower.allocation?.tileId === instance.id ? follower.release() : follower)
+    return { ...player, followers, meeples: followers.filter((follower) => follower.status === 'reserve').length }
+  })
 
   return {
     ...current, board, players,
     model: current.previousBoard,
+    mesh: new StructureMesh(current.previousBoard, players.flatMap((player) => player.followers)),
     previousBoard: null,
     pendingPosition: null,
     phase: 'place',
     message: '',
   }
+}
+
+export function confirmGameTurn(current: GameState): GameState {
+  if (current.phase !== 'meeple' || !current.pendingPosition || !pendingTile(current)) return current
+  const [x, y] = current.pendingPosition.split(',').map(Number)
+  const records = calculateScores(current.mesh.completedAfter(new Position(x, y)), false, current.scoring)
+  const player = current.players[current.currentPlayerIndex]
+  const eventId = Math.max(0, ...current.activity.map(({ id }) => id)) + 1
+  const settled = applyScores({ ...current, activity: [{
+    id: eventId, playerId: player.id, text: 'colocou uma peça', round: current.round,
+  }, ...current.activity] }, records)
+  const deckIndex = current.deckIndex + 1
+  const exhausted = deckIndex >= current.deck.length
+  const currentPlayerIndex = exhausted ? current.currentPlayerIndex : (current.currentPlayerIndex + 1) % current.players.length
+  const next: GameState = {
+    ...settled, phase: 'place', pendingPosition: null, previousBoard: null,
+    deckIndex, currentPlayerIndex,
+    round: !exhausted && currentPlayerIndex === 0 ? current.round + 1 : current.round,
+    currentKind: current.deck[deckIndex] ?? current.currentKind,
+    rotation: 0,
+    message: records.some(({ followerIds }) => followerIds.length > 0)
+      ? 'Estruturas concluídas pontuadas. Seguidores devolvidos à reserva.' : '',
+  }
+  return exhausted ? finalizeGame(next) : next
 }

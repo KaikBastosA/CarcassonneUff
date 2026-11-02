@@ -8,16 +8,18 @@ import { themeStorageKey } from './theme'
 import type { Theme } from './theme'
 import { useGame } from './useGame'
 import { TileInstance } from './game/tiles'
+import { getFollowerChoices } from './game/actions'
 import type { PlacedTile } from './tiles'
 
 export default function App() {
-  const { state, rotate, place, toggleMeeple, undoPlacement, confirm } = useGame()
+  const { state, rotate, place, selectFollower, undoPlacement, confirm } = useGame()
   const [copied, setCopied] = useState(false)
   const [theme, setTheme] = useState<Theme>(() => (
     document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
   ))
   const player = state.players[state.currentPlayerIndex]
   const pendingTile = state.pendingPosition ? state.board[state.pendingPosition] : undefined
+  const followerChoices = getFollowerChoices(state)
   const preview: PlacedTile | null = state.phase === 'place'
     ? { kind: state.currentKind, rotation: state.rotation }
     : null
@@ -47,12 +49,12 @@ export default function App() {
     }
   }
 
-  function handleCell(position: string) {
+  function handleCell(position: string, regionId?: string) {
     if (state.phase === 'place') {
       place(position)
       return
     }
-    if (position === state.pendingPosition) toggleMeeple()
+    if (position === state.pendingPosition && regionId) selectFollower(regionId)
   }
 
   function toggleTheme() {
@@ -70,6 +72,7 @@ export default function App() {
         validPositions={validPositions}
         unfillablePositions={unfillablePositions}
         warnings={warnings}
+        followerChoices={followerChoices}
         theme={theme}
         onCellClick={handleCell}
       />
@@ -78,7 +81,7 @@ export default function App() {
         onToggleTheme={toggleTheme}
       />
       <PlayerLedger
-        players={state.players} currentPlayerId={player.id}
+        players={state.players} currentPlayerId={state.phase === 'finished' ? '' : player.id}
         activity={state.activity} round={state.round}
         copied={copied} onCopyInvite={copyInvite}
       />
@@ -87,17 +90,20 @@ export default function App() {
         phase={state.phase}
         kind={state.currentKind}
         rotation={state.rotation}
-        deckCount={state.deck.length - state.deckIndex}
+        deckCount={Math.max(0, state.deck.length - state.deckIndex)}
+        standings={[...state.players].sort((a, b) => b.score - a.score)}
+        winners={state.winners}
         pendingMeeple={Boolean(pendingTile?.meeple)}
+        followerChoices={followerChoices}
         message={state.message}
         validCount={validPositions.length}
         unfillableCount={unfillablePositions.length}
         onRotate={rotate}
-        onToggleMeeple={toggleMeeple}
+        onSelectFollower={selectFollower}
         onUndo={undoPlacement}
         onConfirm={confirm}
       />
-      <p className="app-note">Projeto de Software · UFF<br />Prévia local · pontuação e rede em desenvolvimento</p>
+      <p className="app-note">Projeto de Software · UFF<br />Prévia local · rede e IA em desenvolvimento</p>
     </main>
   )
 }
