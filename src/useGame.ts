@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { initialGame } from './game'
+import { placeGameTile, undoGamePlacement } from './game/actions'
 import type { GameState } from './game'
 import type { Rotation } from './tiles'
 
@@ -10,20 +11,12 @@ export function useGame() {
     setState((current) => {
       if (current.phase !== 'place') return current
       const rotation = ((current.rotation + direction * 90 + 360) % 360) as Rotation
-      return { ...current, rotation }
+      return { ...current, rotation, message: '' }
     })
   }
 
   function place(position: string) {
-    setState((current) => {
-      if (current.phase !== 'place' || current.board[position]) return current
-      return {
-        ...current,
-        board: { ...current.board, [position]: { kind: current.currentKind, rotation: current.rotation } },
-        pendingPosition: position,
-        phase: 'meeple',
-      }
-    })
+    setState((current) => placeGameTile(current, position))
   }
 
   function toggleMeeple() {
@@ -48,19 +41,7 @@ export function useGame() {
   }
 
   function undoPlacement() {
-    setState((current) => {
-      if (current.phase !== 'meeple' || !current.pendingPosition) return current
-      const tile = current.board[current.pendingPosition]
-      if (!tile) return current
-      const board = { ...current.board }
-      delete board[current.pendingPosition]
-      const players = tile.meeple
-        ? current.players.map((item, index) => (
-          index === current.currentPlayerIndex ? { ...item, meeples: item.meeples + 1 } : item
-        ))
-        : current.players
-      return { ...current, board, players, pendingPosition: null, phase: 'place' }
-    })
+    setState(undoGamePlacement)
   }
 
   function confirm() {
@@ -79,6 +60,8 @@ export function useGame() {
         ...current,
         phase: 'place',
         pendingPosition: null,
+        previousBoard: null,
+        message: '',
         currentPlayerIndex: nextPlayerIndex,
         round: nextPlayerIndex === 0 ? current.round + 1 : current.round,
         deckIndex: nextDeckIndex,

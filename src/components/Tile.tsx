@@ -5,7 +5,7 @@ import Meeple from './Meeple'
 export default function Tile({ kind, rotation, meeple, art = true }: PlacedTile & { art?: boolean }) {
   return (
     <span className="tile">
-      {art && <img className="tile-art" src={tileImage(kind, rotation)} alt="" draggable={false} />}
+      {art && <img className="tile-art" src={tileImage(kind)} style={{ transform: `rotate(${rotation}deg)` }} alt="" draggable={false} />}
       {meeple && <span className="tile-meeple"><Meeple color={meeple} /></span>}
     </span>
   )

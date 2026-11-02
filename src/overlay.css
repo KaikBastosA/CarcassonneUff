@@ -385,3 +385,5 @@ body {
     display: none;
   }
 }
+
+.board-legend { margin: 8px 0; color: var(--ink-secondary); font-size: 11px; line-height: 1.5; }

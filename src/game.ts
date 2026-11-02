@@ -1,4 +1,6 @@
-import { initialBoard } from './tiles'
+import { GameBoard } from './game/board.ts'
+import { Position } from './game/position.ts'
+import { TileInstance } from './game/tiles.ts'
 import type { BoardState, PlayerColor, Rotation, TileKind } from './tiles'
 
 export type GamePhase = 'place' | 'meeple'
@@ -26,6 +28,9 @@ export interface GameState {
   round: number
   phase: GamePhase
   board: BoardState
+  model: GameBoard
+  previousBoard: GameBoard | null
+  message: string
   currentKind: TileKind
   rotation: Rotation
   deck: TileKind[]
@@ -90,7 +95,10 @@ export const initialGame: GameState = {
   currentPlayerIndex: 0,
   round: 3,
   phase: 'place',
-  board: initialBoard,
+  board: { '0,0': { kind: 'city-road', rotation: 0 } },
+  model: new GameBoard().place(new TileInstance('start', 'city-road'), new Position(0, 0)),
+  previousBoard: null,
+  message: '',
   currentKind: gameDeck[0],
   rotation: 0,
   deck: gameDeck,

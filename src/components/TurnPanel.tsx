@@ -14,6 +14,9 @@ interface TurnPanelProps {
   rotation: Rotation
   deckCount: number
   pendingMeeple: boolean
+  message: string
+  validCount: number
+  unfillableCount: number
   onRotate: (direction: -1 | 1) => void
   onToggleMeeple: () => void
   onUndo: () => void
@@ -27,6 +30,9 @@ export default function TurnPanel({
   rotation,
   deckCount,
   pendingMeeple,
+  message,
+  validCount,
+  unfillableCount,
   onRotate,
   onToggleMeeple,
   onUndo,
@@ -81,11 +87,13 @@ export default function TurnPanel({
         </li>
       </ol>
 
-      <p className="turn-instruction">
-        {placed
+      <p className="turn-instruction" role="status">
+        {message || (placed
           ? 'Coloque um meeple na peça ou confirme a jogada.'
-          : 'Clique em uma casa livre do tabuleiro para colocar a peça.'}
+          : `${validCount} encaixes nesta orientação. Gire a peça para testar outras posições.`)}
       </p>
+      <p className="board-legend">Verde: encaixe válido · Amarelo: cria espaço sem encaixe · ×: sem peça compatível no catálogo</p>
+      {unfillableCount > 0 && <p className="board-legend">{unfillableCount} espaços sem encaixe no catálogo.</p>}
 
       {placed && (
         <div className="turn-actions">

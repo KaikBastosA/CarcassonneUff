@@ -3,6 +3,8 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 import { LocateFixed, Minus, Plus } from 'lucide-react'
 import { meepleImage } from './Meeple'
 import { tileImage } from '../tiles'
+import { drawTileImage } from '../game/rendering'
+import type { Position } from '../game/position'
 import type { BoardState, PlacedTile } from '../tiles'
 
 interface BoardProps {
@@ -11,6 +13,9 @@ interface BoardProps {
   pendingPosition: string | null
   pendingColor: string
   placing: boolean
+  validPositions: readonly Position[]
+  unfillablePositions: readonly Position[]
+  warnings: ReadonlyMap<string, readonly Position[]>
   theme: 'light' | 'dark'
   onCellClick: (position: string) => void
 }
@@ -47,6 +52,9 @@ export default function Board({
   pendingPosition,
   pendingColor,
   placing,
+  validPositions,
+  unfillablePositions,
+  warnings,
   theme,
   onCellClick,
 }: BoardProps) {
@@ -63,6 +71,11 @@ export default function Board({
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null)
   const [imageVersion, setImageVersion] = useState(0)
   const [dpr] = useState(() => Math.min(window.devicePixelRatio || 1, 2))
+  const validKeys = new Set(validPositions.map((position) => position.key))
+  const hoverWarning = hoverCell ? warnings.get(`${hoverCell.x},${hoverCell.y}`) : undefined
+  const warningText = hoverWarning
+    ? `Jogada permitida, mas deixa ${hoverWarning.map(({ x, y }) => `(${x},${y})`).join(', ')} sem encaixe no catálogo.`
+    : undefined
 
   tilesRef.current = tiles
 
@@ -156,10 +169,10 @@ export default function Board({
   useEffect(() => {
     const sources = new Set<string>()
     for (const tile of Object.values(tiles)) {
-      sources.add(tileImage(tile.kind, tile.rotation))
+      sources.add(tileImage(tile.kind))
       if (tile.meeple) sources.add(meepleImage(tile.meeple))
     }
-    if (preview) sources.add(tileImage(preview.kind, preview.rotation))
+    if (preview) sources.add(tileImage(preview.kind))
 
     const jobs: Promise<void>[] = []
     let pending = false
@@ -246,6 +259,29 @@ export default function Board({
       context.stroke()
     }
 
+    const highlight = (position: Position, color: string, marker = '') => {
+      const x = camera.x + position.x * cellPx
+      const y = camera.y + position.y * cellPx
+      context.save()
+      context.fillStyle = color
+      context.fillRect(x + 1, y + 1, cellPx - 2, cellPx - 2)
+      if (marker) {
+        context.fillStyle = theme === 'dark' ? '#f0eadb' : '#79532f'
+        context.font = `600 ${Math.max(14, cellPx * 0.25)}px sans-serif`
+        context.textAlign = 'right'
+        context.fillText(marker, x + cellPx - 6, y + cellPx - 6)
+      }
+      context.restore()
+    }
+
+    if (placing) {
+      for (const position of validPositions) {
+        const risky = warnings.has(position.key)
+        highlight(position, risky ? 'rgba(201, 154, 46, 0.3)' : 'rgba(111, 153, 86, 0.22)', risky ? '!' : '')
+      }
+    }
+    for (const position of unfillablePositions) highlight(position, 'rgba(184, 79, 61, 0.25)', '×')
+
     const getSprite = (src: string) => {
       const cached = sprites.current.get(src)
       if (cached) return cached
@@ -292,9 +328,9 @@ export default function Board({
       const screenY = camera.y + y * cellPx
       if (screenX > viewport.width + drawPx || screenY > viewport.height + drawPx) continue
       if (screenX + cellPx < -drawPx || screenY + cellPx < -drawPx) continue
-      const sprite = getSprite(tileImage(tile.kind, tile.rotation))
+      const sprite = getSprite(tileImage(tile.kind))
       if (!sprite) continue
-      context.drawImage(sprite, screenX - featherPx, screenY - featherPx, drawPx, drawPx)
+      drawTileImage(context, sprite, screenX - featherPx, screenY - featherPx, drawPx, tile.rotation)
     }
 
     for (const { x, y, tile } of entries) {
@@ -327,18 +363,18 @@ export default function Board({
 
     if (placing && preview && hoverCell) {
       const key = `${hoverCell.x},${hoverCell.y}`
-      if (!tiles[key]) {
-        const image = images.current.get(tileImage(preview.kind, preview.rotation))
+      if (!tiles[key] && validKeys.has(key)) {
+        const image = images.current.get(tileImage(preview.kind))
         if (image?.complete && image.naturalWidth > 0) {
           const screenX = camera.x + hoverCell.x * cellPx
           const screenY = camera.y + hoverCell.y * cellPx
           context.globalAlpha = 0.55
-          context.drawImage(image, screenX, screenY, cellPx, cellPx)
+          drawTileImage(context, image, screenX, screenY, cellPx, preview.rotation)
           context.globalAlpha = 1
         }
       }
     }
-  }, [tiles, preview, pendingPosition, pendingColor, placing, theme, camera, viewport, imageVersion, dpr, hoverCell])
+  }, [tiles, preview, pendingPosition, pendingColor, placing, validPositions, unfillablePositions, warnings, theme, camera, viewport, imageVersion, dpr, hoverCell])
 
   function handlePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.pointerType === 'mouse' && event.button !== 0) return
@@ -396,6 +432,7 @@ export default function Board({
       <div
         className="board-stage" ref={stageRef}
         role="region" aria-label="Mesa de Carcassonne"
+        title={placing ? warningText : undefined}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -417,7 +454,7 @@ export default function Board({
           <LocateFixed size={15} aria-hidden="true" />
         </button>
       </div>
-      <p className="board-hint">Arraste para mover · scroll para zoom</p>
+      <p className="board-hint">{placing && warningText ? warningText : 'Arraste para mover · scroll para zoom'}</p>
     </>
   )
 }

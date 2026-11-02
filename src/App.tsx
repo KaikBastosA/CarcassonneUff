@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Board from './components/Board'
 import PlayerLedger from './components/PlayerLedger'
 import RoomHeader from './components/RoomHeader'
@@ -7,6 +7,7 @@ import { playerHex, roomCode } from './game'
 import { themeStorageKey } from './theme'
 import type { Theme } from './theme'
 import { useGame } from './useGame'
+import { TileInstance } from './game/tiles'
 import type { PlacedTile } from './tiles'
 
 export default function App() {
@@ -20,6 +21,16 @@ export default function App() {
   const preview: PlacedTile | null = state.phase === 'place'
     ? { kind: state.currentKind, rotation: state.rotation }
     : null
+  const { validPositions, unfillablePositions, warnings } = useMemo(() => {
+    const tile = new TileInstance('preview', state.currentKind, state.rotation)
+    const validPositions = state.model.getValidPositions(tile)
+    const unfillablePositions = state.model.getUnfillablePositions()
+    const warnings = new Map(validPositions.flatMap((position) => {
+      const affected = state.model.getNewUnfillablePositions(tile, position)
+      return affected.length > 0 ? [[position.key, affected] as const] : []
+    }))
+    return { validPositions, unfillablePositions, warnings }
+  }, [state.model, state.currentKind, state.rotation])
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -56,6 +67,9 @@ export default function App() {
         pendingPosition={state.pendingPosition}
         pendingColor={playerHex[player.color]}
         placing={state.phase === 'place'}
+        validPositions={validPositions}
+        unfillablePositions={unfillablePositions}
+        warnings={warnings}
         theme={theme}
         onCellClick={handleCell}
       />
@@ -75,12 +89,15 @@ export default function App() {
         rotation={state.rotation}
         deckCount={state.deck.length - state.deckIndex}
         pendingMeeple={Boolean(pendingTile?.meeple)}
+        message={state.message}
+        validCount={validPositions.length}
+        unfillableCount={unfillablePositions.length}
         onRotate={rotate}
         onToggleMeeple={toggleMeeple}
         onUndo={undoPlacement}
         onConfirm={confirm}
       />
-      <p className="app-note">Projeto de Software · UFF<br />Prévia local · regras e rede ainda não implementadas</p>
+      <p className="app-note">Projeto de Software · UFF<br />Prévia local · pontuação e rede em desenvolvimento</p>
     </main>
   )
 }
