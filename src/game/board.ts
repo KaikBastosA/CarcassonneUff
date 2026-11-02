@@ -1,11 +1,18 @@
 import { Position } from './position.ts'
-import { rotations, sides, TileInstance } from './tiles.ts'
-import type { Side } from './tiles.ts'
+import { rotations, sides, tileKinds, TileInstance } from './tiles.ts'
+import type { Rotation, Side, TileKind } from './tiles.ts'
 
 export interface TilePlacement {
   readonly tile: TileInstance
   readonly position: Position
 }
+
+export interface TileOrientation {
+  readonly kind: TileKind
+  readonly rotation: Rotation
+}
+
+const catalogTiles = tileKinds.flatMap((kind) => rotations.map((rotation) => new TileInstance('catalog', kind, rotation)))
 
 export type PlacementFailure = 'occupied' | 'duplicate-tile' | 'disconnected' | 'terrain-mismatch' | 'starting-position'
 export type PlacementValidation = { readonly valid: true } | { readonly valid: false; readonly reason: PlacementFailure }
@@ -91,6 +98,35 @@ export class GameBoard {
         ? [{ tile: oriented, position }]
         : [])
     })
+  }
+
+  getFittingTiles(position: Position): TileOrientation[] {
+    if (this.tileAt(position)) return []
+    if (this.size === 0) {
+      return position.equals(new Position(0, 0))
+        ? catalogTiles.map(({ kind, rotation }) => ({ kind, rotation }))
+        : []
+    }
+    const neighbors = sides.flatMap((side) => {
+      const tile = this.tileAt(position.neighbor(side))
+      return tile ? [{ side, terrain: tile.terrainAt(oppositeSide(side)) }] : []
+    })
+    if (neighbors.length === 0) return []
+
+    return catalogTiles
+      .filter((tile) => neighbors.every(({ side, terrain }) => tile.terrainAt(side) === terrain))
+      .map(({ kind, rotation }) => ({ kind, rotation }))
+  }
+
+  getUnfillablePositions(): Position[] {
+    return this.candidatePositions().filter((position) => this.getFittingTiles(position).length === 0)
+  }
+
+  getNewUnfillablePositions(tile: TileInstance, position: Position): Position[] {
+    const next = this.place(tile, position)
+    return position.adjacent().filter((neighbor) => !next.tileAt(neighbor)
+      && next.getFittingTiles(neighbor).length === 0
+      && this.getFittingTiles(neighbor).length > 0)
   }
 
   private candidatePositions(): Position[] {

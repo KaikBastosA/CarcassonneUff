@@ -49,6 +49,7 @@ h2 { font-size: 14px; margin-bottom: 12px; }
 .tool-help { font-size: 12px; color: #686c60; margin-top: 9px; }
 .table { min-width: 0; }
 .board-status { min-height: 40px; margin-bottom: 10px; font-size: 12px; color: #526846; }
+.board-legend { margin-bottom: 10px; font-size: 11px; color: #686c60; }
 .board-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 12px; }
 .board-actions { display: flex; gap: 6px; }
 .board-actions button { padding: 0 12px; }
@@ -57,6 +58,9 @@ h2 { font-size: 14px; margin-bottom: 12px; }
 .cell { border: 0; border-radius: 0; padding: 0; aspect-ratio: 1; background: #eae6d8; position: relative; min-width: 0; min-height: 0; }
 .cell:hover:not(:disabled) { background: #dde5d2; }
 .cell-valid { background: #dce8ce; box-shadow: inset 0 0 0 1px #8da77b; }
+.cell-unfillable { background: #ead4cc; box-shadow: inset 0 0 0 1px #ba8b7b; }
+.cell-warning { background: #f2e1b5; box-shadow: inset 0 0 0 1px #b5964f; }
+.cell-indicator { position: absolute; right: 4px; bottom: 2px; font-size: 16px; font-weight: 600; color: #79532f; z-index: 1; pointer-events: none; }
 .cell:hover:not(:disabled) .tile-art, .cell:focus-visible .tile-art { filter: brightness(1.05); }
 .cell:focus-visible { z-index: 1; outline-offset: -3px; }
 .cell-coordinate { font-size: 9px; color: #858778; position: absolute; top: 3px; left: 4px; }

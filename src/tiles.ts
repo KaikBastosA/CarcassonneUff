@@ -27,10 +27,8 @@ const tileImages = Object.fromEntries(
   Object.entries(tileModules).map(([path, source]) => [path.split('/').pop()?.replace('.webp', '') ?? '', source]),
 )
 
-export function tileImage(kind: TileKind, rotation: Rotation) {
-  const definition = tileCatalog[kind]
-  const index = (rotation / 90) % definition.imageRotations
-  return tileImages[`${definition.source}${index}`]
+export function tileImage(kind: TileKind) {
+  return tileImages[`${tileCatalog[kind].source}0`]
 }
 
 export const boardSize = 9

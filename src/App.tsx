@@ -31,6 +31,11 @@ export default function App() {
   const { board, meeples } = snapshot
   const selectedTile = new TileInstance('preview', kind, rotation)
   const validPositions = board.getValidPositions(selectedTile)
+  const unfillablePositions = board.getUnfillablePositions()
+  const warnings = new Map(validPositions.flatMap((position) => {
+    const affected = board.getNewUnfillablePositions(selectedTile, position)
+    return affected.length > 0 ? [[position.key, affected] as const] : []
+  }))
   const count = board.size
 
   function save(next: BoardSnapshot) {
@@ -55,6 +60,10 @@ export default function App() {
         return
       }
       save({ board: board.place(tile, position), meeples })
+      const affected = warnings.get(position.key)
+      if (affected) {
+        setMessage(`Peça colocada. Sem encaixe no catálogo: ${affected.map(({ x, y }) => `(${x},${y})`).join(', ')}. Essa jogada é permitida.`)
+      }
     }
   }
 
@@ -130,9 +139,11 @@ export default function App() {
             </div>
           </div>
           <p className="board-status" role="status">{message || (tool === 'tile'
-            ? `${validPositions.length} posições válidas para ${tileNames[kind]} a ${rotation}°. Gire a peça para testar outras orientações.`
+            ? `${validPositions.length} posições válidas para ${tileNames[kind]} a ${rotation}°. Gire a peça para testar outras orientações.${unfillablePositions.length > 0 ? ` ${unfillablePositions.length} espaços sem encaixe no catálogo.` : ''}`
             : 'Meeples livres para teste: clique em uma peça para colocar ou remover a cor selecionada.')}</p>
+          <p className="board-legend">Verde: encaixe válido · Amarelo: cria espaço sem encaixe · ×: sem peça compatível no catálogo</p>
           <Board board={board} meeples={meeples} validPositions={validPositions}
+            unfillablePositions={unfillablePositions} warnings={warnings}
             preview={tool === 'tile' ? { kind, rotation } : null} onCellClick={editCell} />
         </section>
       </div>
