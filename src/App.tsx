@@ -1,119 +1,88 @@
 import { useState } from 'react'
 import Board from './components/Board'
-import Meeple from './components/Meeple'
-import Tile from './components/Tile'
-import { initialBoard, playerNames, tileKinds, tileNames } from './tiles'
-import type { BoardState, PlayerColor, Rotation, TileKind } from './tiles'
-
-type Tool = 'tile' | 'meeple' | 'erase'
-const playerColors: PlayerColor[] = ['blue', 'red', 'yellow', 'black']
+import PlayerLedger from './components/PlayerLedger'
+import RoomHeader from './components/RoomHeader'
+import TurnPanel from './components/TurnPanel'
+import { playerHex, roomCode } from './game'
+import { useGame } from './useGame'
+import type { PlacedTile } from './tiles'
 
 export default function App() {
-  const [history, setHistory] = useState<BoardState[]>([initialBoard])
-  const [kind, setKind] = useState<TileKind>('road')
-  const [rotation, setRotation] = useState<Rotation>(0)
-  const [color, setColor] = useState<PlayerColor>('blue')
-  const [tool, setTool] = useState<Tool>('tile')
-  const tiles = history[history.length - 1]
-  const count = Object.keys(tiles).length
+  const { state, rotate, place, toggleMeeple, undoPlacement, confirm } = useGame()
+  const [copied, setCopied] = useState(false)
+  const player = state.players[state.currentPlayerIndex]
+  const pendingTile = state.pendingPosition ? state.board[state.pendingPosition] : undefined
+  const preview: PlacedTile | null = state.phase === 'place'
+    ? { kind: state.currentKind, rotation: state.rotation }
+    : null
 
-  function save(next: BoardState) {
-    setHistory((previous) => [...previous, next])
+  async function copyInvite() {
+    try {
+      await navigator.clipboard.writeText(`${location.origin}${location.pathname}?sala=${roomCode}`)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1800)
+    } catch {
+      setCopied(false)
+    }
   }
 
-  function editCell(position: string) {
-    const current = tiles[position]
-
-    if (tool === 'erase') {
-      if (!current) return
-      const next = { ...tiles }
-      delete next[position]
-      save(next)
-    } else if (tool === 'meeple') {
-      if (!current) return
-      const meeple = current.meeple === color ? undefined : color
-      save({ ...tiles, [position]: { ...current, meeple } })
-    } else {
-      if (current) return
-      save({ ...tiles, [position]: { kind, rotation } })
+  function handleCell(position: string) {
+    if (state.phase === 'place') {
+      place(position)
+      return
     }
+    if (position === state.pendingPosition) toggleMeeple()
   }
 
   return (
     <main className="app">
-      <header className="header">
-        <h1>Carcassonne</h1>
-        <span className="project-name">Projeto de Software - UFF</span>
-      </header>
-
-      <div className="workspace">
-        <aside className="tools" aria-label="Ferramentas de montagem">
-          <section aria-labelledby="pieces-heading">
-            <h2 id="pieces-heading">Peças</h2>
-            <div className="tile-picker">
-              {tileKinds.map((tileKind) => (
-                <button type="button" key={tileKind} className="tile-option"
-                  aria-pressed={tool === 'tile' && kind === tileKind}
-                  onClick={() => {
-                    setKind(tileKind)
-                    setRotation(0)
-                    setTool('tile')
-                  }}>
-                  <Tile kind={tileKind} rotation={0} />
-                  <span>{tileNames[tileKind]}</span>
-                </button>
-              ))}
+      <RoomHeader
+        players={state.players} roomCode={roomCode}
+        copied={copied} onCopyInvite={copyInvite}
+      />
+      <div className="game">
+        <PlayerLedger
+          players={state.players} currentPlayerId={player.id}
+          activity={state.activity} round={state.round}
+          copied={copied} onCopyInvite={copyInvite}
+        />
+        <section className="table-column" aria-label="Mesa">
+          <div className="table-head">
+            <div>
+              <h2>Mesa</h2>
+              <span>Rodada {state.round} · {Object.keys(state.board).length} peças</span>
             </div>
-            <div className="current-tile">
-              <Tile kind={kind} rotation={rotation} />
-              <div>
-                <span>{rotation}°</span>
-                <button type="button" onClick={() => {
-                  setRotation((angle) => ((angle + 90) % 360) as Rotation)
-                  setTool('tile')
-                }}>Girar peça ↻</button>
-              </div>
-            </div>
-          </section>
-
-          <section aria-labelledby="meeples-heading">
-            <h2 id="meeples-heading">Meeples</h2>
-            <div className="meeple-picker">
-              {playerColors.map((playerColor) => (
-                <button type="button" key={playerColor} aria-label={`Meeple ${playerNames[playerColor]}`}
-                  aria-pressed={tool === 'meeple' && color === playerColor}
-                  onClick={() => {
-                    setColor(playerColor)
-                    setTool('meeple')
-                  }}>
-                  <Meeple color={playerColor} />
-                </button>
-              ))}
-            </div>
-            <p className="tool-help">Selecione uma cor e clique em uma peça.</p>
-          </section>
-
-          <button type="button" className="erase-button" aria-pressed={tool === 'erase'} onClick={() => {
-            setTool('erase')
-          }}>Apagar peça</button>
-        </aside>
-
-        <section className="table" aria-label="Montagem do tabuleiro">
-          <div className="board-toolbar">
-            <span>{count} {count === 1 ? 'peça' : 'peças'} no tabuleiro</span>
-            <div className="board-actions">
-              <button type="button" disabled={history.length === 1} onClick={() => {
-                setHistory((previous) => previous.slice(0, -1))
-              }}>Desfazer</button>
-              <button type="button" disabled={count === 0} onClick={() => {
-                save({})
-              }}>Limpar</button>
-            </div>
+            <span className="table-turn">
+              <span className="turn-dot" style={{ background: playerHex[player.color] }} aria-hidden="true" />
+              {player.local ? 'Sua vez' : `Vez de ${player.name}`}
+            </span>
           </div>
-          <Board tiles={tiles} preview={tool === 'tile' ? { kind, rotation } : null} onCellClick={editCell} />
+          <Board
+            tiles={state.board}
+            preview={preview}
+            pendingPosition={state.pendingPosition}
+            pendingColor={playerHex[player.color]}
+            placing={state.phase === 'place'}
+            onCellClick={handleCell}
+          />
         </section>
+        <TurnPanel
+          player={player}
+          phase={state.phase}
+          kind={state.currentKind}
+          rotation={state.rotation}
+          deckCount={state.deck.length - state.deckIndex}
+          pendingMeeple={Boolean(pendingTile?.meeple)}
+          onRotate={rotate}
+          onToggleMeeple={toggleMeeple}
+          onUndo={undoPlacement}
+          onConfirm={confirm}
+        />
       </div>
-
+      <footer className="app-footer">
+        <span>Projeto de Software · UFF</span>
+        <span>Prévia de interface · regras e rede ainda não implementadas</span>
+      </footer>
     </main>
   )
 }
