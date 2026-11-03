@@ -57,7 +57,7 @@ export default function App() {
 
   if (state.phase === 'configure') return (
     <main className="app">
-      <GameHeader theme={theme} onToggleTheme={toggleTheme} onNewGame={newGame} />
+      <GameHeader theme={theme} setup onToggleTheme={toggleTheme} onNewGame={newGame} />
       <GameSetup configuration={configuration} message={state.message} onStart={start} />
     </main>
   )
@@ -106,7 +106,6 @@ export default function App() {
         onUndo={undoPlacement}
         onConfirm={confirm}
       />
-      <p className="app-note">Projeto de Software · UFF<br />Partida local · humanos e IA</p>
     </main>
   )
 }
