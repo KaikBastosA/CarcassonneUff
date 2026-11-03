@@ -110,14 +110,6 @@ img { display: block; max-width: 100%; }
   white-space: nowrap;
 }
 
-.game-mode {
-  padding-left: 12px;
-  border-left: 1px solid var(--border);
-  font-size: 10px;
-  color: var(--ink-muted);
-  white-space: nowrap;
-}
-
 .header-actions {
   display: flex;
   align-items: center;
