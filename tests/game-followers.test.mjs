@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { renderBoard } from '../src/game/board-state.ts'
+import { Position } from '../src/game/position.ts'
 import { initialGame, withTile } from './helpers/game.mjs'
 import { getFollowerChoices, placeGameTile, selectGameFollower, undoGamePlacement } from '../src/game/actions.ts'
 
@@ -14,7 +16,8 @@ test('a reserva real começa com sete seguidores e substitui os dados fictícios
     assert.equal(player.score, 0)
   }
   assert.equal(initialGame.round, 1)
-  assert.deepEqual(initialGame.activity, [])
+  assert.equal(initialGame.activity, '')
+  assert.deepEqual(initialGame.events, [])
 })
 
 test('selecionar, trocar de região e remover usa apenas um seguidor da reserva', () => {
@@ -22,7 +25,7 @@ test('selecionar, trocar de região e remover usa apenas um seguidor da reserva'
   const selected = selectGameFollower(state, 'road')
   assert.equal(selected.players[0].meeples, 6)
   assert.equal(selected.players[0].followers[0].role, 'thief')
-  assert.equal(selected.board['1,0'].meepleRegion, 'road')
+  assert.equal(renderBoard(selected.board, selected.players)['1,0'].meepleRegion, 'road')
   assert.equal(selected.mesh.structureAt('tile-0', 'road').followers.length, 1)
   assert.equal(state.players[0].meeples, 7)
   const moved = selectGameFollower(selected, 'field-east')
@@ -30,11 +33,11 @@ test('selecionar, trocar de região e remover usa apenas um seguidor da reserva'
   assert.equal(moved.players[0].followers[0].role, 'farmer')
   assert.equal(moved.mesh.structureAt('tile-0', 'road').followers.length, 0)
   assert.equal(moved.mesh.structureAt('tile-0', 'field-east').followers.length, 1)
-  assert.equal(moved.board['1,0'].meepleRegion, 'field-east')
+  assert.equal(renderBoard(moved.board, moved.players)['1,0'].meepleRegion, 'field-east')
   const removed = selectGameFollower(moved, 'field-east')
   assert.equal(removed.players[0].meeples, 7)
-  assert.equal(removed.board['1,0'].meeple, undefined)
-  assert.equal(removed.players[0].followers[0].role, 'none')
+  assert.equal(renderBoard(removed.board, removed.players)['1,0'].meeple, undefined)
+  assert.equal(removed.players[0].followers[0].role, undefined)
 })
 
 test('escolhas válidas refletem a seleção atual e preservam a seleção diante de erro', () => {
@@ -54,7 +57,7 @@ test('seguidores só são selecionados na peça recém-jogada durante a etapa op
   assert.equal(selectGameFollower(initialGame, 'city'), initialGame)
   assert.deepEqual(getFollowerChoices(initialGame), [])
   const state = pending()
-  const forged = { ...state, pendingPosition: '0,0' }
+  const forged = { ...state, pendingPosition: new Position(0, 0) }
   assert.equal(selectGameFollower(forged, 'city'), forged)
   assert.deepEqual(getFollowerChoices(forged), [])
   const confirmed = { ...selectGameFollower(state, 'road'), phase: 'place', pendingPosition: null, previousBoard: null }
@@ -109,7 +112,8 @@ test('sem reserva nenhuma região pode receber outro seguidor', () => {
 test('desfazer devolve o seguidor e restaura a malha sem alocação órfã', () => {
   const selected = selectGameFollower(pending(), 'field-west')
   const undone = undoGamePlacement(selected)
-  assert.equal(undone.model, initialGame.model)
+  assert.deepEqual(undone.model.placements, initialGame.model.placements)
+  assert.equal(undone.board, initialGame.board)
   assert.equal(undone.players[0].meeples, 7)
   assert.ok(undone.players[0].followers.every((follower) => follower.status === 'reserve'))
   assert.ok(undone.mesh.structures.every((structure) => structure.followers.length === 0))

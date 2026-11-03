@@ -2,6 +2,7 @@ import type { GameState } from '../game.ts'
 import { playerColors } from '../game.ts'
 import { confirmGameTurn, placeGameTile, selectGameFollower } from './actions.ts'
 import { GameBoard } from './board.ts'
+import { boardSnapshot } from './board-state.ts'
 import { drawPlayableTile, shuffledTiles } from './deck.ts'
 import { Follower } from './followers.ts'
 import { StructureMesh } from './mesh.ts'
@@ -39,10 +40,10 @@ function simulationState(view: DecisionView, future: readonly TileInstance[]): G
   })
   return {
     players, currentPlayerIndex: view.playerIds.indexOf(view.playerId), startingPlayerIndex: view.playerIds.indexOf(view.playerId),
-    round: 1, phase: 'place', model, mesh: new StructureMesh(model, players.flatMap(({ followers }) => followers)),
-    board: Object.fromEntries(model.placements.map(({ tile, position }) => [position.key, { kind: tile.kind, rotation: tile.rotation, variant: tile.variant }])),
-    previousBoard: null, message: '', scoring: [], winners: [], rotation: 0, deckIndex: 0, pendingPosition: null,
-    activity: [], discarded: [], seed: null,
+    round: 1, phase: 'place', model, mesh: new StructureMesh(model, players.flatMap(({ followers }) => followers), players),
+    board: boardSnapshot(model, players.flatMap(({ followers }) => followers)),
+    previousBoard: null, message: '', scoring: [], winners: [], tieBreakReserves: null, rotation: 0, deckIndex: 0, pendingPosition: null,
+    activity: '', events: [], discarded: [], seed: 0,
     deck: [new TileInstance(view.tile.id, view.tile.kind, 0, view.tile.variant), ...future],
   }
 }
@@ -50,7 +51,7 @@ function simulationState(view: DecisionView, future: readonly TileInstance[]): G
 function advance(state: GameState, decision: TurnDecision): GameState {
   let next = placeGameTile({ ...state, rotation: decision.rotation }, decision.position)
   if (next.phase !== 'meeple') return state
-  if (decision.regionId !== null) next = selectGameFollower(next, decision.regionId)
+  if (decision.regionId != null) next = selectGameFollower(next, decision.regionId)
   next = drawPlayableTile(confirmGameTurn(next))
   return next.deckIndex >= next.deck.length ? finalizeGame(next) : next
 }
@@ -62,7 +63,7 @@ function estimate(state: GameState, owner: string): number {
     const complete = structure instanceof CompletableStructure && structure.isComplete
     const potential = structure instanceof Field ? (structure.adjacentCityIds.length - structure.completedCityCount) * 0.8 : 0
     const points = structure.score(true) * (complete ? 1 : 0.65) + potential
-    result += structure.majority().reduce((sum, id) => sum + points * weight(id), 0)
+    result += structure.majorityIds().reduce((sum, id) => sum + points * weight(id), 0)
   }
   for (const player of state.players) result += player.meeples * 0.35 * weight(player.id)
   return result
@@ -82,7 +83,7 @@ export function lookAhead(
     const initial = simulationState(view, future)
     for (const [index, { decision }] of candidates.entries()) {
       let state = advance(initial, decision)
-      for (let turn = 0; turn < view.playerIds.length && state.phase !== 'finished'; turn++) {
+      for (let turn = 0; turn < view.playerIds.length && state.winners.length === 0; turn++) {
         const observation = observe(state)
         const next = observation ? choose(observation) : null
         if (!next) break

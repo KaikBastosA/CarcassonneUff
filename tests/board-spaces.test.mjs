@@ -46,8 +46,8 @@ test('o aviso antecipa o problema com três vizinhos em todas as rotações do c
     const [target] = rotatePlacements([[1, 0, 'city', 0]], rotation)
     const key = `${target[0]},${target[1]}`
     assert.ok(!board.getUnfillablePositions().some((position) => position.key === key))
-    assert.equal(board.validatePlacement(tile, position).valid, true)
-    assert.ok(board.getNewUnfillablePositions(tile, position).some((position) => position.key === key))
+    assert.equal(board.validatePlacement(tile, position), true)
+    assert.ok(board.place(tile, position).getNewUnfillablePositions().some((position) => position.key === key))
     assert.ok(board.getValidPositions(tile).some((candidate) => candidate.equals(position)))
     assert.ok(board.getValidMoves(tile).some((candidate) => candidate.position.equals(position) && candidate.tile.rotation === orientation))
     assert.ok(board.place(tile, position).getUnfillablePositions().some((position) => position.key === key))
@@ -70,7 +70,7 @@ test('o aviso também detecta combinações impossíveis com apenas dois vizinho
     const target = rotatePlacements([[1, 1, 'city', 0]], rotation)[0]
     const position = new Position(target[0], target[1])
     assert.equal(board.neighborsOf(position).length, 1)
-    assert.ok(board.getNewUnfillablePositions(tile, new Position(x, y)).some((candidate) => candidate.equals(position)))
+    assert.ok(board.place(tile, new Position(x, y)).getNewUnfillablePositions().some((candidate) => candidate.equals(position)))
     const next = board.place(tile, new Position(x, y))
     assert.equal(next.neighborsOf(position).length, 2)
     assert.deepEqual(next.getFittingTiles(position), [])
@@ -92,8 +92,8 @@ test('todas as 81 combinações de quatro bordas são comparadas com o catálogo
     ])
     const position = new Position(1, 1)
     const expected = tileKinds.flatMap((kind) => rotations.flatMap((rotation) =>
-      board.validatePlacement(new TileInstance('candidate', kind, rotation), position).valid ? [{ kind, rotation }] : []))
-    const actual = board.getFittingTiles(position)
+      board.validatePlacement(new TileInstance('candidate', kind, rotation), position) ? [{ kind, rotation }] : []))
+    const actual = board.getFittingTiles(position).map(({ kind, rotation }) => ({ kind, rotation }))
     assert.deepEqual(actual, expected, requirement.join(','))
     assert.equal(board.getUnfillablePositions().some((candidate) => candidate.equals(position)), expected.length === 0)
     if (expected.length === 0) impossible++
@@ -104,7 +104,7 @@ test('todas as 81 combinações de quatro bordas são comparadas com o catálogo
 test('uma orientação incompatível da peça selecionada não torna o espaço impossível', () => {
   const board = makeBoard([[0, 0, 'road', 0]])
   const position = new Position(0, -1)
-  assert.equal(board.validatePlacement(new TileInstance('next', 'road', 90), position).valid, false)
+  assert.equal(board.validatePlacement(new TileInstance('next', 'road', 90), position), false)
   assert.ok(board.getFittingTiles(position).some(({ kind, rotation }) => kind === 'road' && rotation === 0))
   assert.deepEqual(board.getUnfillablePositions(), [])
   assert.deepEqual(board.getFittingTiles(new Position(0, 0)), [])
@@ -117,9 +117,9 @@ test('avisos não repetem espaços antigos e deixam de existir ao desfazer a col
   const after = before.place(tile, new Position(2, 0))
   assert.deepEqual(before.getUnfillablePositions(), [])
   assert.ok(after.getUnfillablePositions().some((position) => position.key === '1,0'))
-  assert.deepEqual(after.getNewUnfillablePositions(new TileInstance('other', 'monastery'), new Position(0, 1)), [])
+  assert.deepEqual(after.place(new TileInstance('other', 'monastery'), new Position(0, 1)).getNewUnfillablePositions(), [])
   assert.deepEqual(before.getUnfillablePositions(), [])
-  assert.throws(() => before.getNewUnfillablePositions(tile, new Position(0, 0)))
+  assert.throws(() => before.place(tile, new Position(0, 0)).getNewUnfillablePositions())
 })
 
 test('a análise ignora identidades e estoque, sem confundir modelos com exemplares', () => {
@@ -138,8 +138,8 @@ test('uma única jogada pode avisar sobre dois espaços novos sem alterar a vali
   ])
   const tile = new TileInstance('next', 'city-corner', 270)
   const position = new Position(1, 1)
-  assert.equal(board.validatePlacement(tile, position).valid, true)
-  assert.deepEqual(board.getNewUnfillablePositions(tile, position).map((position) => position.key).sort(), ['0,1', '1,0'])
+  assert.equal(board.validatePlacement(tile, position), true)
+  assert.deepEqual(board.place(tile, position).getNewUnfillablePositions().map((position) => position.key).sort(), ['0,1', '1,0'])
   assert.ok(board.getFittingTiles(new Position(0, 1)).length > 0)
   assert.ok(board.getFittingTiles(new Position(1, 0)).length > 0)
   assert.equal(board.place(tile, position).size, board.size + 1)

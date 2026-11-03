@@ -1,3 +1,4 @@
+import { boardSnapshot } from '../../src/game/board-state.ts'
 import { GameBoard } from '../../src/game/board.ts'
 import { Position } from '../../src/game/position.ts'
 import { TileInstance } from '../../src/game/tiles.ts'
@@ -42,20 +43,22 @@ export const initialGame = {
   startingPlayerIndex: 0,
   round: 1,
   phase: 'place',
-  board: { '0,0': { kind: 'city-road', rotation: 0 } },
+  board: boardSnapshot(initialModel, initialPlayers.flatMap(({ followers }) => followers)),
   model: initialModel,
-  mesh: new StructureMesh(initialModel),
+  mesh: new StructureMesh(initialModel, initialPlayers.flatMap(({ followers }) => followers), initialPlayers),
   previousBoard: null,
   message: '',
   scoring: [],
   winners: [],
+  tieBreakReserves: null,
   rotation: 0,
   deck: kinds.map((kind, index) => new TileInstance(`tile-${index}`, kind)),
   discarded: [],
   seed: 1,
   deckIndex: 0,
   pendingPosition: null,
-  activity: initialActivity,
+  activity: '',
+  events: initialActivity,
 }
 
 export function withTile(state, kind, rotation = state.rotation) {

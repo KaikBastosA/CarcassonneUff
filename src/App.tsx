@@ -11,23 +11,25 @@ import { useGame } from './useGame'
 import { TileInstance } from './game/tiles'
 import { getFollowerChoices } from './game/actions'
 import type { PlacedTile } from './tiles'
+import { renderBoard } from './game/board-state'
 
 export default function App() {
-  const { state, configuration, start, rotate, place, selectFollower, undoPlacement, confirm, newGame } = useGame()
+  const { state, phase, configuration, start, rotate, place, selectFollower, undoPlacement, confirm, newGame } = useGame()
   const [theme, setTheme] = useState<Theme>(() => (
     document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
   ))
   const player = state.players[state.currentPlayerIndex]
   const automatic = player.strategy.automatic
-  const pendingTile = state.pendingPosition ? state.board[state.pendingPosition] : undefined
+  const board = useMemo(() => renderBoard(state.board, state.players), [state.board, state.players])
+  const pendingTile = state.pendingPosition ? board[state.pendingPosition.key] : undefined
   const followerChoices = getFollowerChoices(state)
   const drawn = state.deck[state.deckIndex]
-  const preview: PlacedTile | null = state.phase === 'place' && drawn && !automatic
+  const preview: PlacedTile | null = phase === 'place' && drawn && !automatic
     ? { kind: drawn.kind, rotation: state.rotation, variant: drawn.variant }
     : null
   const { validPositions, unfillablePositions, warnings } = useMemo(() => {
     const unfillablePositions = state.model.getUnfillablePositions()
-    if (!drawn || state.phase !== 'place' || automatic) return { validPositions: [], unfillablePositions, warnings: new Map() }
+    if (!drawn || phase !== 'place' || automatic) return { validPositions: [], unfillablePositions, warnings: new Map() }
     const tile = new TileInstance(drawn.id, drawn.kind, state.rotation, drawn.variant)
     const validPositions = state.model.getValidPositions(tile)
     const warnings = new Map(validPositions.flatMap((position) => {
@@ -35,7 +37,7 @@ export default function App() {
       return affected.length > 0 ? [[position.key, affected] as const] : []
     }))
     return { validPositions, unfillablePositions, warnings }
-  }, [state.model, drawn, state.rotation, state.phase, automatic])
+  }, [state.model, drawn, state.rotation, phase, automatic])
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -44,18 +46,18 @@ export default function App() {
 
   function handleCell(position: string, regionId?: string) {
     if (automatic) return
-    if (state.phase === 'place') {
+    if (phase === 'place') {
       place(position)
       return
     }
-    if (position === state.pendingPosition && regionId) selectFollower(regionId)
+    if (position === state.pendingPosition?.key && regionId) selectFollower(regionId)
   }
 
   function toggleTheme() {
     setTheme((current) => (current === 'dark' ? 'light' : 'dark'))
   }
 
-  if (state.phase === 'configure') return (
+  if (phase === 'configure') return (
     <main className="app">
       <GameHeader theme={theme} setup onToggleTheme={toggleTheme} onNewGame={newGame} />
       <GameSetup configuration={configuration} message={state.message} onStart={start} />
@@ -65,11 +67,11 @@ export default function App() {
   return (
     <main className="app">
       <Board
-        tiles={state.board}
+        tiles={board}
         preview={preview}
-        pendingPosition={state.pendingPosition}
+        pendingPosition={state.pendingPosition?.key ?? null}
         pendingColor={playerHex[player.color]}
-        placing={state.phase === 'place' && !automatic}
+        placing={phase === 'place' && !automatic}
         validPositions={validPositions}
         unfillablePositions={unfillablePositions}
         warnings={warnings}
@@ -83,19 +85,19 @@ export default function App() {
         onNewGame={newGame}
       />
       <PlayerLedger
-        players={state.players} currentPlayerId={state.phase === 'finished' ? '' : player.id}
-        activity={state.activity} round={state.round}
+        players={state.players} currentPlayerId={phase === 'finished' ? '' : player.id}
+        activity={state.events} round={state.round}
       />
       <TurnPanel
         player={player}
-        phase={state.phase}
+        phase={phase}
         kind={drawn?.kind ?? 'city-road'}
         variant={drawn?.variant ?? 'plain'}
         rotation={state.rotation}
         deckCount={Math.max(0, state.deck.length - state.deckIndex - (drawn ? 1 : 0))}
         discardedCount={state.discarded.length}
         standings={[...state.players].sort((a, b) => b.score - a.score)}
-        winners={state.winners}
+        winners={state.winners.map(({ id }) => id)}
         pendingMeeple={Boolean(pendingTile?.meeple)}
         followerChoices={followerChoices}
         message={state.message}

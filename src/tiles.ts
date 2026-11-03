@@ -4,7 +4,8 @@ import shieldImage from './assets/coat-of-arms.svg'
 
 export { shieldImage, tileCatalog, tileKinds }
 export type { TileKind, Rotation, TileVariant }
-export type PlayerColor = 'blue' | 'red' | 'yellow' | 'black' | 'green'
+export type Color = 'blue' | 'red' | 'yellow' | 'black' | 'green'
+export type PlayerColor = Color
 
 export const terrainNames: Record<Terrain, string> = {
   city: 'Cidade', road: 'Estrada', field: 'Campo', monastery: 'Mosteiro',
@@ -30,7 +31,8 @@ export interface PlacedTile {
   meepleRegion?: string
 }
 
-export type BoardState = Record<string, PlacedTile>
+export type RenderBoard = Record<string, PlacedTile>
+export type { BoardState, Rect } from './game/board-state.ts'
 
 const tileModules = import.meta.glob('./assets/pieces/*.webp', { eager: true, import: 'default' }) as Record<string, string>
 const tileImages = Object.fromEntries(

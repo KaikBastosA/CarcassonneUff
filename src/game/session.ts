@@ -1,22 +1,25 @@
 import { playerColors } from '../game.ts'
-import type { GameState, Player } from '../game.ts'
+import type { GameState, GamePhase, Player } from '../game.ts'
 import type { PlayerColor, Rotation } from '../tiles.ts'
 import { confirmGameTurn, getFollowerChoices, placeGameTile, selectGameFollower, undoGamePlacement } from './actions.ts'
 import { GameBoard } from './board.ts'
-import { createGameTiles, drawPlayableTile } from './deck.ts'
+import { boardSnapshot } from './board-state.ts'
+import { comprarCartela, descartarCartela, createGameTiles, drawPlayableTile } from './deck.ts'
 import { createFollowers } from './followers.ts'
 import { StructureMesh } from './mesh.ts'
 import { Position } from './position.ts'
-import { finalizeGame } from './scoring.ts'
-import { computerStrategies, playerStrategies } from './strategy.ts'
-import type { ComputerDifficulty, PlayerControl, TurnDecision } from './strategy.ts'
+import { aplicarCriterioDesempate, consolidarPontos, consolidarPontuacaoGeral } from './scoring.ts'
+import type { ScoringRecord } from './scoring.ts'
+
+import { computerStrategies, playerStrategies, decisionView } from './strategy.ts'
+import type { Difficulty, ControlType, TurnDecision } from './strategy.ts'
 import { rotations } from './tiles.ts'
 
 export interface PlayerSettings {
   readonly name: string
   readonly color: PlayerColor
-  readonly control?: PlayerControl
-  readonly difficulty?: ComputerDifficulty
+  readonly control?: ControlType
+  readonly difficulty?: Difficulty
 }
 
 export interface MatchConfiguration {
@@ -58,22 +61,26 @@ function createPlayers(config: MatchConfiguration): readonly Player[] {
 
 function configurationSnapshot(config: MatchConfiguration): GameState {
   const model = new GameBoard()
+  const players = createPlayers(config)
   return {
-    players: createPlayers(config), currentPlayerIndex: config.startingPlayerIndex, startingPlayerIndex: config.startingPlayerIndex, round: 1,
-    phase: 'configure', board: {}, model, mesh: new StructureMesh(model), previousBoard: null,
-    message: '', scoring: [], winners: [], rotation: 0, deck: [], discarded: [], seed: null,
-    deckIndex: 0, pendingPosition: null, activity: [],
+    players, currentPlayerIndex: config.startingPlayerIndex, startingPlayerIndex: config.startingPlayerIndex, round: 1,
+    phase: 'place', board: boardSnapshot(model, players.flatMap(({ followers }) => followers)), model, mesh: new StructureMesh(model, players.flatMap(({ followers }) => followers), players), previousBoard: null,
+    message: '', scoring: [], winners: [], tieBreakReserves: null, rotation: 0, deck: [], discarded: [], seed: config.seed ?? 0,
+    deckIndex: 0, pendingPosition: null, activity: '', events: [],
   }
 }
 
 function freezeSnapshot(snapshot: GameState): GameState {
+  const players = Object.freeze(snapshot.players.map((player) => Object.isFrozen(player) ? player
+    : Object.freeze({ ...player, followers: Object.freeze([...player.followers]) })))
   return Object.freeze({
-    ...snapshot,
-    board: Object.freeze(Object.fromEntries(Object.entries(snapshot.board).map(([key, tile]) => [key, Object.freeze({ ...tile })]))),
-    players: Object.freeze(snapshot.players.map((player) => Object.freeze({ ...player, followers: Object.freeze([...player.followers]) }))),
+    ...snapshot, players,
+    mesh: new StructureMesh(snapshot.model, players.flatMap(({ followers }) => followers), players),
     deck: Object.freeze([...snapshot.deck]), discarded: Object.freeze([...snapshot.discarded]),
-    activity: Object.freeze(snapshot.activity.map((event) => Object.freeze({ ...event }))),
-    scoring: Object.freeze([...snapshot.scoring]), winners: Object.freeze([...snapshot.winners]),
+    events: Object.freeze(snapshot.events.map((event) => Object.freeze({ ...event }))),
+    scoring: Object.freeze(snapshot.scoring.map((record) => Object.freeze({ ...record, followerIds: Object.freeze([...record.followerIds]) }))),
+    tieBreakReserves: snapshot.tieBreakReserves ? Object.freeze({ ...snapshot.tieBreakReserves }) : null,
+    winners: Object.freeze(snapshot.winners.map((winner) => players.find(({ id }) => id === winner.id)!)),
   })
 }
 
@@ -81,7 +88,7 @@ export abstract class MatchState {
   abstract readonly name: string
 
   start(match: GameSession, _config: MatchConfiguration): GameSession { return match }
-  place(match: GameSession, _position: string): GameSession { return match }
+  place(match: GameSession, _position: Position): GameSession { return match }
   selectFollower(match: GameSession, _regionId: string | null): GameSession { return match }
   undo(match: GameSession): GameSession { return match }
   rotate(match: GameSession, _direction: -1 | 1): GameSession { return match }
@@ -101,12 +108,11 @@ export class ConfigurationState extends MatchState {
     const seed = configuration.seed ?? Math.floor(Math.random() * 4294967296)
     const { initial, deck } = createGameTiles(seed)
     const model = new GameBoard().place(initial, new Position(0, 0))
-    const snapshot: GameState = {
-      ...configurationSnapshot(configuration), phase: 'place', seed, deck,
-      model, mesh: new StructureMesh(model), board: { '0,0': { kind: initial.kind, rotation: 0 } },
-    }
+    const base = configurationSnapshot(configuration)
+    const followers = base.players.flatMap(({ followers }) => followers)
+    const snapshot: GameState = { ...base, seed, deck, model, mesh: new StructureMesh(model, followers, base.players), board: boardSnapshot(model, followers) }
     const state = new InProgressState()
-    return state.enter(new GameSession(snapshot, state, configuration))
+    return new GameSession(snapshot, state, configuration).executarTurno()
   }
 }
 
@@ -116,14 +122,11 @@ export class InProgressState extends MatchState {
   enter(match: GameSession): GameSession {
     if (match.snapshot.phase !== 'place') return match
     const snapshot = drawPlayableTile(match.snapshot)
-    if (snapshot.deckIndex >= snapshot.deck.length) {
-      const state = new FinalScoringState()
-      return state.enter(match.withSnapshot(snapshot, state))
-    }
-    return match.withSnapshot(snapshot)
+    const next = match.withSnapshot(snapshot)
+    return next.verificarPilhaVazia() ? next.encerrarPartida() : next
   }
 
-  override place(match: GameSession, position: string): GameSession {
+  override place(match: GameSession, position: Position): GameSession {
     return match.withSnapshot(placeGameTile(match.snapshot, position))
   }
 
@@ -144,7 +147,7 @@ export class InProgressState extends MatchState {
   override confirm(match: GameSession): GameSession {
     const snapshot = confirmGameTurn(match.snapshot)
     if (snapshot === match.snapshot) return match
-    return this.enter(match.withSnapshot(snapshot))
+    return match.withSnapshot(snapshot).executarTurno()
   }
 }
 
@@ -152,8 +155,8 @@ export class FinalScoringState extends MatchState {
   readonly name = 'Apuração final'
 
   enter(match: GameSession): GameSession {
-    const snapshot = finalizeGame(match.snapshot)
-    return snapshot === match.snapshot ? match : new GameSession(snapshot, new FinishedState(), match.configuration)
+    const settled = match.consolidarPontuacaoGeral()
+    return settled === match ? match : new GameSession(settled.snapshot, new FinishedState(), match.configuration)
   }
 }
 
@@ -184,34 +187,86 @@ export class GameSession {
 
   start(configuration: MatchConfiguration = this.configuration): GameSession { return this.state.start(this, configuration) }
   get computerTurn(): boolean {
-    return this.snapshot.phase === 'place' && this.snapshot.players[this.snapshot.currentPlayerIndex].strategy.automatic
+    return this.state instanceof InProgressState && this.snapshot.phase === 'place' && this.snapshot.players[this.snapshot.currentPlayerIndex].strategy.automatic
   }
 
   get humanTurn(): boolean {
     return !this.snapshot.players[this.snapshot.currentPlayerIndex].strategy.automatic
   }
 
-  place(position: string): GameSession { return this.humanTurn ? this.state.place(this, position) : this }
-  selectFollower(regionId: string | null): GameSession { return this.humanTurn ? this.state.selectFollower(this, regionId) : this }
+  posicionarCartela(position: Position | string): GameSession {
+    if (!this.humanTurn) return this
+    if (typeof position === 'string') {
+      const [x, y] = position.split(',').map(Number)
+      if (!/^-?\d+,-?\d+$/.test(position) || !Number.isSafeInteger(x) || !Number.isSafeInteger(y)) {
+        return this.state instanceof InProgressState && this.snapshot.phase === 'place'
+          ? this.withSnapshot({ ...this.snapshot, message: 'Posição inválida.' }) : this
+      }
+      position = new Position(x, y)
+    }
+    return this.state.place(this, position)
+  }
+  selecionarSeguidor(regionId: string | null): GameSession { return this.humanTurn ? this.state.selectFollower(this, regionId) : this }
   undo(): GameSession { return this.humanTurn ? this.state.undo(this) : this }
-  rotate(direction: -1 | 1): GameSession { return this.humanTurn ? this.state.rotate(this, direction) : this }
-  confirm(): GameSession { return this.humanTurn ? this.state.confirm(this) : this }
+  rotacionarCartela(direction: -1 | 1 = 1): GameSession { return this.humanTurn ? this.state.rotate(this, direction) : this }
+  confirmarTurno(): GameSession { return this.humanTurn ? this.state.confirm(this) : this }
 
-  playComputerTurn(decision: TurnDecision | null): GameSession {
-    if (!this.computerTurn || !decision || decision.tileId !== this.snapshot.deck[this.snapshot.deckIndex]?.id
-      || !rotations.includes(decision.rotation) || typeof decision.position !== 'string'
-      || (decision.regionId !== null && typeof decision.regionId !== 'string')) return this
+  get phase(): GamePhase {
+    if (this.state instanceof ConfigurationState) return 'configure'
+    if (this.state instanceof FinishedState || this.state instanceof FinalScoringState) return 'finished'
+    return this.snapshot.phase
+  }
+
+  playComputerTurn(decision?: TurnDecision | null): GameSession {
+    if (!this.computerTurn) return this
+    if (decision === undefined) {
+      const view = decisionView(this.snapshot)
+      decision = view ? this.snapshot.players[this.snapshot.currentPlayerIndex].strategy.chooseTurn(view) : null
+    }
+    if (!decision || decision.tileId !== this.snapshot.deck[this.snapshot.deckIndex]?.id
+      || !rotations.includes(decision.rotation) || !decision.position
+      || (decision.regionId != null && typeof decision.regionId !== 'string')) return this
+    // Worker messages lose class prototypes through structured clone.
+    let position: Position
+    try { position = new Position(decision.position.x, decision.position.y) } catch { return this }
     let next = this.withSnapshot({ ...this.snapshot, rotation: decision.rotation })
-    next = next.state.place(next, decision.position)
+    next = next.state.place(next, position)
     if (next.snapshot.phase !== 'meeple') return this
-    if (decision.regionId !== null) {
+    if (decision.regionId != null) {
       if (!getFollowerChoices(next.snapshot).some((choice) => choice.id === decision.regionId && choice.available)) return this
       next = next.state.selectFollower(next, decision.regionId)
     }
     return next.state.confirm(next)
   }
 
+  executarTurno(): GameSession { return this.state instanceof InProgressState ? this.state.enter(this) : this }
+  verificarPilhaVazia(): boolean { return this.snapshot.deckIndex >= this.snapshot.deck.length }
+  comprarCartela() { return comprarCartela(this.snapshot) }
+  descartarCartela(cartela = this.comprarCartela()): GameSession {
+    if (!(this.state instanceof InProgressState) || cartela?.id !== this.comprarCartela()?.id) return this
+    return this.withSnapshot(descartarCartela(this.snapshot))
+  }
+  consolidarPontos(records: readonly ScoringRecord[]): GameSession { return this.withSnapshot(consolidarPontos(this.snapshot, records)) }
+  consolidarPontuacaoGeral(): GameSession { return this.withSnapshot(consolidarPontuacaoGeral(this.snapshot)) }
+  aplicarCriterioDesempate(reservaSeguidores = this.snapshot.tieBreakReserves ?? undefined): readonly Player[] {
+    return aplicarCriterioDesempate(this.snapshot.players, reservaSeguidores)
+  }
+
+  // Class diagrams use these names; sequence diagrams take precedence at the UI boundary.
+  place(position: Position | string): GameSession { return this.posicionarCartela(position) }
+  selectFollower(regionId: string | null): GameSession { return this.selecionarSeguidor(regionId) }
+  rotate(direction: -1 | 1 = 1): GameSession { return this.rotacionarCartela(direction) }
+  confirm(): GameSession { return this.confirmarTurno() }
+
+  encerrarPartida(): GameSession {
+    if (!(this.state instanceof InProgressState) || this.snapshot.phase !== 'place' || this.snapshot.deckIndex < this.snapshot.deck.length) return this
+    const state = new FinalScoringState()
+    return state.enter(this.withSnapshot(this.snapshot, state))
+  }
+
   newGame(): GameSession {
     return GameSession.configure({ ...this.configuration, seed: undefined })
   }
 }
+
+export { FinalScoringState as ApuracaoFinalState }

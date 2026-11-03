@@ -1,6 +1,8 @@
 import { sides } from './tiles.ts'
 import type { Side } from './tiles.ts'
 
+export type PositionKey = `${number},${number}`
+
 const offsets: Record<Side, readonly [number, number]> = {
   north: [0, -1],
   east: [1, 0],
@@ -21,7 +23,7 @@ export class Position {
     Object.freeze(this)
   }
 
-  get key(): string {
+  get key(): PositionKey {
     return `${this.x},${this.y}`
   }
 

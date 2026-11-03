@@ -10,7 +10,7 @@ Abra o endereço exibido pelo Vite. Configure de 2 a 5 jogadores locais, com nom
 
 Os participantes são definidos na configuração da partida. O placar e o histórico apresentam os jogadores dessa sessão, e o cabeçalho identifica o modo **Partida local**.
 
-A partida usa 72 cartelas distribuídas entre os 12 modelos disponíveis, com quantidades próprias do projeto. Uma cartela inicial é reservada e as outras 71 são embaralhadas. Peças sem encaixe em nenhuma orientação são descartadas automaticamente; ao esgotar a pilha, ocorre a apuração final. O botão **Nova partida** retorna à configuração. A sessão fica na memória do navegador; recarregar a página volta à configuração.
+A partida usa 72 cartelas distribuídas entre os 12 modelos disponíveis, com quantidades próprias do projeto. Uma cartela inicial é reservada e as outras 71 são embaralhadas. Peças sem encaixe em nenhuma orientação são descartadas automaticamente; ao esgotar a pilha, ocorre a apuração final. Em empate de pontos, vence quem tinha mais meeples na reserva antes dessa apuração. A contagem é registrada antes de devolver os seguidores; se pontos e reserva empatarem, os jogadores dividem a vitória. O botão **Nova partida** retorna à configuração. A sessão fica na memória do navegador; recarregar a página volta à configuração.
 
 ## Validação
 
@@ -37,9 +37,15 @@ O modo em rede e a persistência ainda não estão implementados.
 
 ## Arquitetura
 
-O `GameStore` implementa o contrato Observer e mantém a partida atual como única fonte de estado. Os comandos delegam às regras de `GameSession` e notificam os observadores após publicar uma alteração. O hook `useGame` acompanha essas notificações com `useSyncExternalStore`, atualizando mapa, placar e painel pelo mesmo snapshot. A assinatura é removida ao desmontar a interface; os cálculos de IA continuam com cancelamento e proteção contra respostas de uma partida anterior.
+O `GameStore` implementa o contrato Observer e mantém a partida atual como única fonte de estado. Os comandos delegam às regras de `GameSession` e notificam os observadores após publicar uma alteração. O adaptador `GameObserver`, usado pelo hook `useGame`, acompanha essas notificações com `useSyncExternalStore`, atualizando mapa, placar e painel pelo mesmo snapshot. A assinatura é removida ao desmontar a interface; os cálculos de IA continuam com cancelamento e proteção contra respostas de uma partida anterior.
 
 O catálogo inclui três cartelas com brasão: duas Cidades em curva e uma Cidade fechada, dentro do total de 72. Cada brasão acrescenta 2 pontos à cidade completa ou 1 ponto à cidade incompleta na apuração final. O símbolo acompanha a rotação e permanece na cartela após a devolução dos seguidores.
+
+O ciclo da partida pertence a `MatchState` (`ConfigurationState`, `InProgressState`, `FinalScoringState` e `FinishedState`). `GameState.phase` descreve apenas o turno: `place` ou `meeple`. A fase exibida na interface é uma projeção de `GameSession.phase`.
+
+`GameStore.getSnapshot()` devolve o `GameState` estável, e `getSession()` fornece a sessão para agendar e cancelar a IA. `BoardState` contém as cartelas, seguidores, limites e posições; `renderBoard()` projeta esses dados para o canvas. Os comandos usam `Position` e `FollowerAllocation`, e a alocação devolve uma nova `StructureMesh`. Cada `ScoringRecord` identifica um jogador e uma estrutura; empates de maioria produzem um registro por vencedor.
+
+A nomenclatura das sequências mais recentes é prioritária: `GameSession.posicionarCartela()`, `selecionarSeguidor()`, `rotacionarCartela()` e `confirmarTurno()`. A malha expõe `podePosicionarSeguidor()`, `posicionarSeguidor()` e `avaliarEstruturasConcluidas()`. A apuração final avalia estradas, cidades, mosteiros e campos nessa ordem. `ApuracaoFinalState` é um nome alternativo para `FinalScoringState`. Os métodos ingleses dos diagramas de classes continuam disponíveis.
 
 ## Assets
 

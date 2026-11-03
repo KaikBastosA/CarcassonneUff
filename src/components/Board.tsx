@@ -5,12 +5,12 @@ import { meepleFilter, meepleImage } from './Meeple'
 import { shieldImage, tileImage } from '../tiles'
 import { drawTileImage } from '../game/rendering'
 import type { Position } from '../game/position'
-import type { BoardState, PlacedTile } from '../tiles'
+import type { RenderBoard, PlacedTile } from '../tiles'
 import { TileInstance } from '../game/tiles'
 import type { FollowerChoice } from '../game/actions'
 
 interface BoardProps {
-  tiles: BoardState
+  tiles: RenderBoard
   preview: PlacedTile | null
   pendingPosition: string | null
   pendingColor: string
@@ -75,7 +75,7 @@ export default function Board({
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null)
   const [imageVersion, setImageVersion] = useState(0)
   const [dpr] = useState(() => Math.min(window.devicePixelRatio || 1, 2))
-  const validKeys = new Set(validPositions.map((position) => position.key))
+  const validKeys = new Set<string>(validPositions.map((position) => position.key))
   const hoverWarning = hoverCell ? warnings.get(`${hoverCell.x},${hoverCell.y}`) : undefined
   const warningText = hoverWarning
     ? `Jogada permitida, mas deixa ${hoverWarning.map(({ x, y }) => `(${x},${y})`).join(', ')} sem encaixe no catálogo.`

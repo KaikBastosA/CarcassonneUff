@@ -6,6 +6,7 @@ import { createServer } from 'vite'
 import { rotations, tileKinds, TileInstance } from '../src/game/tiles.ts'
 import { finalizeGame } from '../src/game/scoring.ts'
 import { GameSession } from '../src/game/session.ts'
+import { renderBoard } from '../src/game/board-state.ts'
 import { initialGame, withTile } from './helpers/game.mjs'
 import { confirmGameTurn as settleTurn, getFollowerChoices, placeGameTile, selectGameFollower } from '../src/game/actions.ts'
 
@@ -50,7 +51,7 @@ test('o painel mostra regiões selecionáveis e o fazendeiro é desenhado na reg
     assert.ok(markup.includes('Ladrão'))
     assert.ok(markup.includes('aria-pressed="true"'))
     assert.ok(markup.includes('Remover seguidor'))
-    const tile = renderToStaticMarkup(createElement(Tile, state.board['1,0']))
+    const tile = renderToStaticMarkup(createElement(Tile, renderBoard(state.board, state.players)['1,0']))
     assert.ok(tile.includes('left:50%'))
     assert.ok(tile.includes('top:80%'))
     assert.ok(tile.includes('translate(-50%, -50%) rotate(90deg)'))
@@ -66,9 +67,9 @@ test('o painel final apresenta o vencedor e o placar sem oferecer outra jogada',
     const pending = selectGameFollower(placeGameTile(initialGame, '0,-1'), 'city-south')
     const final = finalizeGame(settleTurn({ ...pending, deck: [pending.deck[0]] }))
     const markup = renderToStaticMarkup(createElement(TurnPanel, {
-      player: final.players[0], phase: final.phase, kind: final.deck.at(-1).kind, rotation: final.rotation,
+      player: final.players[0], phase: final.winners.length ? 'finished' : final.phase, kind: final.deck.at(-1).kind, rotation: final.rotation,
       deckCount: 0, discardedCount: 0, pendingMeeple: false, followerChoices: [], message: final.message,
-      validCount: 0, unfillableCount: 0, standings: final.players, winners: final.winners,
+      validCount: 0, unfillableCount: 0, standings: final.players, winners: final.winners.map(({ id }) => id),
       onRotate() {}, onSelectFollower() {}, onUndo() {}, onConfirm() {},
     }))
     assert.ok(markup.includes('Pontuação final'))

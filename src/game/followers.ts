@@ -23,13 +23,20 @@ export class Follower {
     return this.allocation ? 'allocated' : 'reserve'
   }
 
-  get role(): FollowerRole | 'none' {
-    return this.allocation?.role ?? 'none'
+  get role(): FollowerRole | undefined {
+    return this.allocation?.role
   }
 
-  allocate(tileId: string, regionId: string, role: FollowerRole): Follower {
+  allocate(allocation: FollowerAllocation): Follower
+  /** @deprecated Pass a FollowerAllocation object. */
+  allocate(tileId: string, regionId: string, role: FollowerRole): Follower
+  allocate(allocation: FollowerAllocation | string, regionId?: string, role?: FollowerRole): Follower {
     if (this.allocation) throw new Error('Este seguidor já está alocado.')
-    return new Follower(this.id, this.ownerId, { tileId, regionId, role })
+    const target = typeof allocation === 'string' ? { tileId: allocation, regionId: regionId!, role: role! } : allocation
+    if (!target.tileId || !target.regionId || !['thief', 'knight', 'monk', 'farmer'].includes(target.role)) {
+      throw new Error('Alocação de seguidor inválida.')
+    }
+    return new Follower(this.id, this.ownerId, target)
   }
 
   release(): Follower {

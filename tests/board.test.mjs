@@ -38,7 +38,7 @@ test('o tabuleiro vazio ancora a primeira cartela na origem', () => {
   assert.equal(board.tileAt(new Position(0, 0)), undefined)
   assert.deepEqual(board.getValidPositions(tile).map((position) => position.key), ['0,0'])
   assert.equal(board.getValidMoves(tile).length, 4)
-  assert.deepEqual(board.validatePlacement(tile, new Position(1, 0)), { valid: false, reason: 'starting-position' })
+  assert.deepEqual(board.placementValidation(tile, new Position(1, 0)), { valid: false, reason: 'starting-position' })
   assert.equal(board.place(tile, new Position(0, 0)).size, 1)
 })
 
@@ -52,7 +52,7 @@ test('posições ocupadas, exemplares repetidos e peças desconectadas são recu
     [next, new Position(1, 1), 'disconnected'],
     [next, new Position(10, 0), 'disconnected'],
   ]) {
-    assert.deepEqual(board.validatePlacement(candidate, position), { valid: false, reason })
+    assert.deepEqual(board.placementValidation(candidate, position), { valid: false, reason })
     assert.throws(() => board.place(candidate, position))
   }
   assert.equal(board.size, 1)
@@ -61,22 +61,22 @@ test('posições ocupadas, exemplares repetidos e peças desconectadas são recu
 
 test('encaixes aceitam terrenos iguais e recusam estrada, cidade e campo incompatíveis', () => {
   const road = place(new GameBoard(), 0, 0, 'road')
-  assert.equal(road.validatePlacement(new TileInstance('next', 'road'), new Position(0, 1)).valid, true)
-  assert.equal(road.validatePlacement(new TileInstance('next', 'monastery'), new Position(1, 0)).valid, true)
-  assert.equal(road.validatePlacement(new TileInstance('next', 'monastery'), new Position(0, 1)).valid, false)
-  assert.equal(road.validatePlacement(new TileInstance('next', 'city'), new Position(0, 1)).valid, false)
+  assert.equal(road.validatePlacement(new TileInstance('next', 'road'), new Position(0, 1)), true)
+  assert.equal(road.validatePlacement(new TileInstance('next', 'monastery'), new Position(1, 0)), true)
+  assert.equal(road.validatePlacement(new TileInstance('next', 'monastery'), new Position(0, 1)), false)
+  assert.equal(road.validatePlacement(new TileInstance('next', 'city'), new Position(0, 1)), false)
   const city = place(new GameBoard(), 0, 0, 'city')
-  assert.equal(city.validatePlacement(new TileInstance('next', 'city', 180), new Position(0, -1)).valid, true)
-  assert.equal(city.validatePlacement(new TileInstance('next', 'monastery'), new Position(0, -1)).valid, false)
+  assert.equal(city.validatePlacement(new TileInstance('next', 'city', 180), new Position(0, -1)), true)
+  assert.equal(city.validatePlacement(new TileInstance('next', 'monastery'), new Position(0, -1)), false)
 })
 
 test('um encaixe precisa combinar com os quatro vizinhos presentes', () => {
   const board = ring()
   const center = new Position(1, 1)
   assert.equal(board.neighborsOf(center).length, 4)
-  assert.equal(board.validatePlacement(new TileInstance('center', 'city-center'), center).valid, true)
+  assert.equal(board.validatePlacement(new TileInstance('center', 'city-center'), center), true)
   for (const rotation of rotations) {
-    assert.deepEqual(board.validatePlacement(new TileInstance('center', 'city-corner', rotation), center), {
+    assert.deepEqual(board.placementValidation(new TileInstance('center', 'city-corner', rotation), center), {
       valid: false, reason: 'terrain-mismatch',
     })
   }
@@ -104,7 +104,7 @@ test('a geração encontra todos os encaixes de cada modelo e orientação em to
       for (let x = -2; x <= 4; x++) {
         for (let y = -2; y <= 4; y++) {
           const position = new Position(x, y)
-          if (board.validatePlacement(oriented, position).valid) {
+          if (board.validatePlacement(oriented, position)) {
             expected.push(`${position.key}:${rotation}`)
             expectedPositions.push(position.key)
           }
@@ -139,4 +139,21 @@ test('o tabuleiro cresce em coordenadas negativas e além de nove casas sem alte
   placements.pop()
   assert.equal(board.size, 25)
   assert.ok(Object.isFrozen(placements[0]))
+})
+
+test('os contratos do domínio expõem booleano, cartelas vizinhas e decisões com posição', () => {
+  const initial = new TileInstance('start', 'road')
+  const board = new GameBoard().place(initial, new Position(0, 0))
+  assert.equal(board.validatePlacement(new TileInstance('next', 'road'), new Position(0, 1)), true)
+  assert.equal(board.validatePlacement(new TileInstance('next', 'monastery'), new Position(0, 1)), false)
+  assert.deepEqual(board.neighborsOf(new Position(0, 1)), [initial])
+  assert.ok(board.neighborsOf(new Position(0, 1))[0] instanceof TileInstance)
+  assert.ok(board.getFittingTiles(new Position(0, 1)).every((tile) => tile instanceof TileInstance))
+  for (const decision of board.getValidMoves(new TileInstance('next', 'road'))) {
+    assert.equal(decision.tileId, 'next')
+    assert.ok(decision.position instanceof Position)
+    assert.equal(decision.rotation, decision.tile.rotation)
+    assert.equal(board.validatePlacement(decision.tile, decision.position), true)
+  }
+  assert.deepEqual(new GameBoard().getNewUnfillablePositions(), [])
 })

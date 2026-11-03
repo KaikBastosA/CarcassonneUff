@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { boardSnapshot, renderBoard } from '../src/game/board-state.ts'
 import { getFollowerChoices } from '../src/game/actions.ts'
 import { GameBoard } from '../src/game/board.ts'
 import { scheduleComputerTurn } from '../src/game/computer-turn.ts'
@@ -15,9 +16,9 @@ const configuration = {
 }
 
 function placeFirst(store) {
-  const match = store.getSnapshot()
-  const decision = firstLegalDecision(decisionView(match.snapshot))
-  while (store.getSnapshot().snapshot.rotation !== decision.rotation) store.rotate(1)
+  const state = store.getSnapshot()
+  const decision = firstLegalDecision(decisionView(state))
+  while (store.getSnapshot().rotation !== decision.rotation) store.rotate(1)
   store.place(decision.position)
   return decision
 }
@@ -32,6 +33,7 @@ test('snapshot e adaptadores permanecem estáveis entre leituras e cada mesa é 
   const store = new GameStore()
   const other = new GameStore()
   const initial = store.getSnapshot()
+  assert.equal(store.getSession().phase, 'configure')
   const read = store.getSnapshot
   const subscribe = store.subscribe
   const start = store.start
@@ -41,10 +43,11 @@ test('snapshot e adaptadores permanecem estáveis entre leituras e cada mesa é 
   assert.equal(read, store.getSnapshot)
   assert.equal(subscribe, store.subscribe)
   assert.notEqual(read(), initial)
-  assert.equal(initial.snapshot.phase, 'configure')
-  assert.equal(other.getSnapshot().snapshot.phase, 'configure')
-  assert.ok(Object.isFrozen(read().snapshot))
-  assert.throws(() => { read().snapshot.round = 99 })
+  assert.equal(initial.phase, 'place')
+  assert.equal(store.getSession().phase, 'place')
+  assert.equal(other.getSession().phase, 'configure')
+  assert.ok(Object.isFrozen(read()))
+  assert.throws(() => { read().round = 99 })
 })
 
 test('observadores recebem o novo snapshot já publicado e remoção é idempotente', () => {
@@ -53,23 +56,23 @@ test('observadores recebem o novo snapshot já publicado e remoção é idempote
   const scores = []
   const mapObserver = { update() { map.push(store.getSnapshot()) } }
   const scoreObserver = { update() { scores.push(store.getSnapshot()) } }
-  const removeMap = store.add(mapObserver)
+  assert.equal(store.add(mapObserver), undefined)
   store.add(mapObserver)
-  store.add(scoreObserver)
+  assert.equal(store.subscribe(scoreObserver), undefined)
   store.start(configuration)
   assert.equal(map.length, 1)
   assert.equal(scores.length, 1)
   assert.equal(map[0], store.getSnapshot())
   assert.equal(scores[0], map[0])
-  removeMap()
-  removeMap()
+  store.remove(mapObserver)
+  store.remove(mapObserver)
   store.rotate(1)
   assert.equal(map.length, 1)
   assert.equal(scores.length, 2)
   store.remove(scoreObserver)
   store.newGame()
   assert.equal(scores.length, 2)
-  assert.equal(store.getSnapshot().snapshot.phase, 'configure')
+  assert.equal(store.getSession().phase, 'configure')
 })
 
 test('comandos bloqueados não notificam e erros visíveis de validação notificam', () => {
@@ -80,7 +83,7 @@ test('comandos bloqueados não notificam e erros visíveis de validação notifi
   assert.equal(updates.length, 0)
   store.start({ ...configuration, players: [] })
   assert.equal(updates.length, 1)
-  assert.ok(updates[0].snapshot.message)
+  assert.ok(updates[0].message)
   store.start(configuration)
   assert.equal(updates.length, 2)
   const before = store.getSnapshot()
@@ -91,8 +94,8 @@ test('comandos bloqueados não notificam e erros visíveis de validação notifi
   assert.equal(updates.length, 2)
   store.place('0,0')
   assert.equal(updates.length, 3)
-  assert.ok(store.getSnapshot().snapshot.message)
-  assert.equal(store.getSnapshot().snapshot.model, before.snapshot.model)
+  assert.ok(store.getSnapshot().message)
+  assert.equal(store.getSnapshot().model, before.model)
 })
 
 test('inscrições e remoções durante a notificação só afetam observadores ainda ativos', () => {
@@ -119,7 +122,7 @@ test('falha de um observador não impede os demais nem desfaz o snapshot publica
   assert.throws(() => store.start(configuration), (failure) => failure instanceof AggregateError && failure.errors[0] === error)
   assert.equal(seen.length, 1)
   assert.equal(seen[0], store.getSnapshot())
-  assert.equal(seen[0].snapshot.phase, 'place')
+  assert.equal(seen[0].phase, 'place')
   store.remove(broken)
   store.rotate(1)
   assert.equal(seen.length, 2)
@@ -134,13 +137,13 @@ test('inscrever, limpar e reinscrever não acumula notificações como na remont
   const activeCleanup = store.subscribe(listener)
   store.start(configuration)
   assert.equal(calls, 1)
-  const initialRotation = store.getSnapshot().snapshot.rotation
+  const initialRotation = store.getSnapshot().rotation
   activeCleanup()
   activeCleanup()
   store.rotate(1)
   assert.equal(calls, 1)
   const newCleanup = store.subscribe(listener)
-  assert.equal(store.getSnapshot().snapshot.rotation, (initialRotation + 90) % 360)
+  assert.equal(store.getSnapshot().rotation, (initialRotation + 90) % 360)
   store.rotate(1)
   assert.equal(calls, 2)
   newCleanup()
@@ -153,23 +156,23 @@ test('seguidores e desfazer são publicados e confirmar avança a vez uma única
   store.subscribe(() => updates.push(store.getSnapshot()))
   const before = store.getSnapshot()
   const decision = placeFirst(store)
-  assert.equal(store.getSnapshot().snapshot.phase, 'meeple')
-  const choice = getFollowerChoices(store.getSnapshot().snapshot).find(({ available }) => available)
+  assert.equal(store.getSnapshot().phase, 'meeple')
+  const choice = getFollowerChoices(store.getSnapshot()).find(({ available }) => available)
   assert.ok(choice)
   store.selectFollower(choice.id)
-  assert.equal(updates.at(-1).snapshot.players[0].meeples, 6)
+  assert.equal(updates.at(-1).players[0].meeples, 6)
   store.selectFollower(null)
-  assert.equal(updates.at(-1).snapshot.players[0].meeples, 7)
+  assert.equal(updates.at(-1).players[0].meeples, 7)
   store.selectFollower(choice.id)
   store.undoPlacement()
-  assert.equal(updates.at(-1).snapshot.model, before.snapshot.model)
-  assert.equal(updates.at(-1).snapshot.players[0].meeples, 7)
+  assert.deepEqual(updates.at(-1).model.placements, before.model.placements)
+  assert.equal(updates.at(-1).players[0].meeples, 7)
   store.place(decision.position)
   const count = updates.length
   store.confirm()
   assert.equal(updates.length, count + 1)
-  assert.equal(updates.at(-1).snapshot.currentPlayerIndex, 1)
-  assert.equal(updates.at(-1).snapshot.pendingPosition, null)
+  assert.equal(updates.at(-1).currentPlayerIndex, 1)
+  assert.equal(updates.at(-1).pendingPosition, null)
   const settled = store.getSnapshot()
   store.confirm()
   assert.equal(store.getSnapshot(), settled)
@@ -180,20 +183,24 @@ test('pontuação final e devolução de seguidores chegam juntas aos observador
   const base = GameSession.configure().start(configuration)
   const model = [['a', 90, 0, 0], ['b', 180, 1, 0], ['c', 270, 1, 1]].reduce((board, [id, rotation, x, y]) =>
     board.place(new TileInstance(id, 'city-corner', rotation), new Position(x, y)), new GameBoard())
-  const board = Object.fromEntries(model.placements.map(({ tile, position }) => [position.key, { kind: tile.kind, rotation: tile.rotation }]))
+  const board = boardSnapshot(model, base.snapshot.players.flatMap(({ followers }) => followers))
   const match = new GameSession({ ...base.snapshot, model, board, mesh: new StructureMesh(model), rotation: 0, deck: [new TileInstance('last', 'city-corner', 0, 'shield')] }, new InProgressState(), base.configuration)
   const store = new GameStore(match)
   store.place('0,1')
   store.selectFollower('city')
   const updates = []
-  store.subscribe(() => updates.push(store.getSnapshot().snapshot))
+  store.subscribe(() => updates.push(store.getSnapshot()))
   store.confirm()
   assert.equal(updates.length, 1)
-  assert.equal(updates[0].phase, 'finished')
+  assert.equal(store.getSession().phase, 'finished')
+  assert.equal(updates[0].phase, 'place')
   assert.equal(updates[0].players[0].score, 10)
+  assert.equal(updates[0].winners[0], updates[0].players[0])
+  assert.ok(Object.isFrozen(updates[0].winners[0]))
+  assert.throws(() => { updates[0].winners[0].score = 999 })
   assert.equal(updates[0].players[0].meeples, 7)
-  assert.equal(updates[0].board['0,1'].meeple, undefined)
-  assert.equal(updates[0].board['0,1'].variant, 'shield')
+  assert.equal(renderBoard(updates[0].board, updates[0].players)['0,1'].meeple, undefined)
+  assert.equal(renderBoard(updates[0].board, updates[0].players)['0,1'].variant, 'shield')
 })
 
 test('decisões automáticas são publicadas uma vez e respostas após reinício são ignoradas', () => {
@@ -202,7 +209,7 @@ test('decisões automáticas são publicadas uma vez e respostas após reinício
   store.start(config)
   const updates = []
   store.subscribe(() => updates.push(store.getSnapshot()))
-  const expected = store.getSnapshot()
+  const expected = store.getSession()
   const decision = computerStrategies.basic.chooseTurn(decisionView(expected.snapshot))
   store.rotate(1)
   store.place(decision.position)
@@ -210,16 +217,16 @@ test('decisões automáticas são publicadas uma vez e respostas após reinício
   assert.equal(updates.length, 0)
   store.playComputerTurn(expected, decision)
   assert.equal(updates.length, 1)
-  assert.equal(updates[0].snapshot.phase, 'place')
-  assert.equal(updates[0].snapshot.model.size, 2)
-  assert.equal(updates[0].snapshot.currentPlayerIndex, 1)
+  assert.equal(updates[0].phase, 'place')
+  assert.equal(updates[0].model.size, 2)
+  assert.equal(updates[0].currentPlayerIndex, 1)
   store.playComputerTurn(expected, decision)
   assert.equal(updates.length, 1)
   store.newGame()
   assert.equal(updates.length, 2)
   store.start(config)
   const restarted = store.getSnapshot()
-  assert.equal(restarted.snapshot.deck[0].id, expected.snapshot.deck[0].id)
+  assert.equal(restarted.deck[0].id, expected.snapshot.deck[0].id)
   const count = updates.length
   store.playComputerTurn(expected, decision)
   assert.equal(store.getSnapshot(), restarted)
@@ -233,7 +240,7 @@ test('agendamento pode ser cancelado e remontado sobre o store sem executar dois
   store.start(config)
   let notifications = 0
   const unsubscribe = store.subscribe(() => { notifications++ })
-  const expected = store.getSnapshot()
+  const expected = store.getSession()
   const first = workerStub()
   const cleanup = scheduleComputerTurn(expected, (decision) => store.playComputerTurn(expected, decision), () => first)
   context.mock.timers.tick(450)
@@ -247,7 +254,7 @@ test('agendamento pode ser cancelado e remontado sobre o store sem executar dois
   second.onmessage({ data: decision })
   second.onmessage({ data: decision })
   assert.equal(notifications, 1)
-  assert.equal(store.getSnapshot().snapshot.model.size, 2)
+  assert.equal(store.getSnapshot().model.size, 2)
   stop()
   unsubscribe()
   assert.ok(first.terminated && second.terminated)
@@ -258,17 +265,17 @@ test('store observável conduz IA vs IA até o resultado sem publicar fases inte
   const config = { ...configuration, players: configuration.players.map((player) => ({ ...player, control: 'computer' })) }
   const store = new GameStore()
   const updates = []
-  store.subscribe(() => updates.push(store.getSnapshot().snapshot))
+  store.subscribe(() => updates.push(store.getSnapshot()))
   store.start(config)
   let turns = 0
-  while (store.getSnapshot().snapshot.phase !== 'finished') {
-    const expected = store.getSnapshot()
+  while (store.getSession().phase !== 'finished') {
+    const expected = store.getSession()
     const worker = workerStub()
     const cleanup = scheduleComputerTurn(expected, (decision) => store.playComputerTurn(expected, decision), () => worker)
     context.mock.timers.tick(450)
     worker.onmessage({ data: computerStrategies.basic.chooseTurn(worker.view) })
     cleanup()
-    const current = store.getSnapshot().snapshot
+    const current = store.getSnapshot()
     assert.equal(current.model.size, expected.snapshot.model.size + 1)
     assert.ok(current.deckIndex > expected.snapshot.deckIndex)
     assert.equal(current.pendingPosition, null)
@@ -280,9 +287,9 @@ test('store observável conduz IA vs IA até o resultado sem publicar fases inte
   assert.equal(final.deckIndex, 71)
   assert.equal(final.model.size + final.discarded.length, 72)
   assert.ok(final.players.every(({ meeples }) => meeples === 7))
-  for (const player of final.players) assert.equal(player.score, final.scoring.filter(({ winners }) => winners.includes(player.id)).reduce((sum, record) => sum + record.points, 0))
+  for (const player of final.players) assert.equal(player.score, final.scoring.filter(({ playerId }) => playerId === player.id).reduce((sum, record) => sum + record.points, 0))
   const count = updates.length
-  scheduleComputerTurn(store.getSnapshot(), () => assert.fail('turno após encerramento'), () => assert.fail('worker após encerramento'))
+  scheduleComputerTurn(store.getSession(), () => assert.fail('turno após encerramento'), () => assert.fail('worker após encerramento'))
   context.mock.timers.tick(10000)
   assert.equal(updates.length, count)
 })

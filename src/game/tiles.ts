@@ -25,7 +25,8 @@ export const ports = [
 export type TileKind = (typeof tileKinds)[number]
 export type Side = (typeof sides)[number]
 export type Rotation = (typeof rotations)[number]
-export type TileVariant = 'plain' | 'shield'
+export type Variant = 'plain' | 'shield'
+export type TileVariant = Variant
 export type Port = (typeof ports)[number]
 export type Terrain = 'city' | 'road' | 'field' | 'monastery'
 
@@ -33,6 +34,8 @@ export interface RegionPoint {
   readonly x: number
   readonly y: number
 }
+
+export type Point = RegionPoint
 
 export interface TileRegion {
   readonly id: string
@@ -46,10 +49,11 @@ export interface TileRegion {
 export interface TileDefinition {
   readonly name: string
   readonly source: string
-  readonly imageRotations: number
+  readonly imageRotations: readonly Rotation[]
   readonly quantity: number
   readonly regions: readonly TileRegion[]
-  readonly shieldVariant?: {
+  readonly shieldVariant?: Variant
+  readonly shield?: {
     readonly quantity: number
     readonly regionId: string
     readonly anchor: RegionPoint
@@ -62,22 +66,22 @@ function region(id: string, terrain: Terrain, connections: readonly Port[], adja
 
 export const tileCatalog: Readonly<Record<TileKind, TileDefinition>> = {
   city: {
-    name: 'Cidade', source: 'CastleWall', imageRotations: 4, quantity: 14,
+    name: 'Cidade', source: 'CastleWall', imageRotations: rotations, quantity: 14,
     regions: [
       region('city', 'city', ['north-west', 'north', 'north-east'], [], { x: 0.5, y: 0.16 }),
       region('field', 'field', ports.slice(3), ['city'], { x: 0.5, y: 0.65 }),
     ],
   },
   'city-corner': {
-    name: 'Cidade em curva', source: 'CastleEdge', imageRotations: 4, quantity: 8,
-    shieldVariant: { quantity: 2, regionId: 'city', anchor: { x: 0.86, y: 0.52 } },
+    name: 'Cidade em curva', source: 'CastleEdge', imageRotations: rotations, quantity: 8,
+    shieldVariant: 'shield', shield: { quantity: 2, regionId: 'city', anchor: { x: 0.86, y: 0.52 } },
     regions: [
       region('city', 'city', ports.slice(0, 6), [], { x: 0.72, y: 0.24 }),
       region('field', 'field', ports.slice(6), ['city'], { x: 0.25, y: 0.75 }),
     ],
   },
   'city-sides': {
-    name: 'Cidade dupla', source: 'CastleSides', imageRotations: 2, quantity: 4,
+    name: 'Cidade dupla', source: 'CastleSides', imageRotations: [0, 90], quantity: 4,
     regions: [
       region('city-north', 'city', ports.slice(0, 3), [], { x: 0.5, y: 0.16 }),
       region('city-south', 'city', ports.slice(6, 9), [], { x: 0.5, y: 0.84 }),
@@ -85,12 +89,12 @@ export const tileCatalog: Readonly<Record<TileKind, TileDefinition>> = {
     ],
   },
   'city-center': {
-    name: 'Cidade fechada', source: 'CastleCenter', imageRotations: 1, quantity: 1,
-    shieldVariant: { quantity: 1, regionId: 'city', anchor: { x: 0.76, y: 0.28 } },
+    name: 'Cidade fechada', source: 'CastleCenter', imageRotations: [0], quantity: 1,
+    shieldVariant: 'shield', shield: { quantity: 1, regionId: 'city', anchor: { x: 0.76, y: 0.28 } },
     regions: [region('city', 'city', ports, [], { x: 0.5, y: 0.5 })],
   },
   'city-road': {
-    name: 'Cidade e estrada', source: 'CastleWallRoad', imageRotations: 4, quantity: 8,
+    name: 'Cidade e estrada', source: 'CastleWallRoad', imageRotations: rotations, quantity: 8,
     regions: [
       region('city', 'city', ports.slice(0, 3), [], { x: 0.5, y: 0.16 }),
       region('road', 'road', ['east', 'west'], [], { x: 0.5, y: 0.53 }),
@@ -99,7 +103,7 @@ export const tileCatalog: Readonly<Record<TileKind, TileDefinition>> = {
     ],
   },
   road: {
-    name: 'Estrada', source: 'Road', imageRotations: 4, quantity: 12,
+    name: 'Estrada', source: 'Road', imageRotations: rotations, quantity: 12,
     regions: [
       region('road', 'road', ['north', 'south'], [], { x: 0.5, y: 0.5 }),
       region('field-east', 'field', ['north-east', 'east-north', 'east', 'east-south', 'south-east'], [], { x: 0.8, y: 0.5 }),
@@ -107,7 +111,7 @@ export const tileCatalog: Readonly<Record<TileKind, TileDefinition>> = {
     ],
   },
   curve: {
-    name: 'Curva', source: 'RoadCurve', imageRotations: 4, quantity: 11,
+    name: 'Curva', source: 'RoadCurve', imageRotations: rotations, quantity: 11,
     regions: [
       region('road', 'road', ['south', 'west'], [], { x: 0.48, y: 0.55 }),
       region('field-inner', 'field', ['south-west', 'west-south'], [], { x: 0.18, y: 0.83 }),
@@ -115,7 +119,7 @@ export const tileCatalog: Readonly<Record<TileKind, TileDefinition>> = {
     ],
   },
   junction: {
-    name: 'Bifurcação', source: 'RoadJunctionSmall', imageRotations: 4, quantity: 4,
+    name: 'Bifurcação', source: 'RoadJunctionSmall', imageRotations: rotations, quantity: 4,
     regions: [
       region('road-east', 'road', ['east'], [], { x: 0.85, y: 0.5 }),
       region('road-south', 'road', ['south'], [], { x: 0.5, y: 0.85 }),
@@ -126,7 +130,7 @@ export const tileCatalog: Readonly<Record<TileKind, TileDefinition>> = {
     ],
   },
   crossroads: {
-    name: 'Encruzilhada', source: 'RoadCrossLarge', imageRotations: 1, quantity: 1,
+    name: 'Encruzilhada', source: 'RoadCrossLarge', imageRotations: [0], quantity: 1,
     regions: [
       region('road', 'road', sides, [], { x: 0.5, y: 0.5 }),
       region('field-north-east', 'field', ['north-east', 'east-north'], [], { x: 0.8, y: 0.2 }),
@@ -136,18 +140,18 @@ export const tileCatalog: Readonly<Record<TileKind, TileDefinition>> = {
     ],
   },
   'road-end': {
-    name: 'Fim de estrada', source: 'RoadEnd', imageRotations: 4, quantity: 3,
+    name: 'Fim de estrada', source: 'RoadEnd', imageRotations: rotations, quantity: 3,
     regions: [
       region('road', 'road', ['south'], [], { x: 0.5, y: 0.8 }),
       region('field', 'field', ports.filter((port) => port !== 'south'), [], { x: 0.25, y: 0.3 }),
     ],
   },
   monastery: {
-    name: 'Mosteiro', source: 'Monastery', imageRotations: 1, quantity: 4,
+    name: 'Mosteiro', source: 'Monastery', imageRotations: [0], quantity: 4,
     regions: [region('monastery', 'monastery', [], [], { x: 0.5, y: 0.5 }), region('field', 'field', ports, [], { x: 0.18, y: 0.8 })],
   },
   'monastery-road': {
-    name: 'Mosteiro e estrada', source: 'MonasteryRoad', imageRotations: 4, quantity: 2,
+    name: 'Mosteiro e estrada', source: 'MonasteryRoad', imageRotations: rotations, quantity: 2,
     regions: [
       region('monastery', 'monastery', [], [], { x: 0.5, y: 0.5 }),
       region('road', 'road', ['south'], [], { x: 0.5, y: 0.85 }),
@@ -157,10 +161,11 @@ export const tileCatalog: Readonly<Record<TileKind, TileDefinition>> = {
 }
 
 function freezeDefinition(definition: TileDefinition) {
-  if (definition.shieldVariant) {
-    Object.freeze(definition.shieldVariant.anchor)
-    Object.freeze(definition.shieldVariant)
+  if (definition.shield) {
+    Object.freeze(definition.shield.anchor)
+    Object.freeze(definition.shield)
   }
+  Object.freeze(definition.imageRotations)
   for (const region of definition.regions) {
     Object.freeze(region.anchor)
     Object.freeze(region.ports)
@@ -207,7 +212,7 @@ export class TileInstance {
   get regions(): readonly TileRegion[] {
     return tileCatalog[this.kind].regions.map((region) => ({
       ...region,
-      shields: region.shields + (this.variant === 'shield' && region.id === tileCatalog[this.kind].shieldVariant?.regionId ? 1 : 0),
+      shields: region.shields + (this.variant === 'shield' && region.id === tileCatalog[this.kind].shield?.regionId ? 1 : 0),
       anchor: rotatePoint(region.anchor, this.rotation),
       ports: region.ports.map((port) => rotatePort(port, this.rotation)),
     }))
@@ -217,9 +222,13 @@ export class TileInstance {
     return tileCatalog[this.kind].regions.reduce((total, region) => total + region.shields, this.variant === 'shield' ? 1 : 0)
   }
 
-  get shieldMarkers(): readonly RegionPoint[] {
-    const shield = tileCatalog[this.kind].shieldVariant
+  get markers(): readonly RegionPoint[] {
+    const shield = tileCatalog[this.kind].shield
     return this.variant === 'shield' && shield ? [rotatePoint(shield.anchor, this.rotation)] : []
+  }
+
+  get shieldMarkers(): readonly RegionPoint[] {
+    return this.markers
   }
 
   terrainAt(side: Side): Terrain {
@@ -236,6 +245,6 @@ export function createTileSet(): TileInstance[] {
   return tileKinds.flatMap((kind) => Array.from(
     { length: tileCatalog[kind].quantity },
     (_, index) => new TileInstance(`${kind}-${index + 1}`, kind, 0,
-      index >= tileCatalog[kind].quantity - (tileCatalog[kind].shieldVariant?.quantity ?? 0) ? 'shield' : 'plain'),
+      index >= tileCatalog[kind].quantity - (tileCatalog[kind].shield?.quantity ?? 0) ? 'shield' : 'plain'),
   ))
 }

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { boardSnapshot, renderBoard } from '../src/game/board-state.ts'
 import { Worker } from 'node:worker_threads'
 import { playerColors } from '../src/game.ts'
 import { getFollowerChoices } from '../src/game/actions.ts'
@@ -10,6 +11,8 @@ import { Position } from '../src/game/position.ts'
 import { GameSession, InProgressState } from '../src/game/session.ts'
 import { ComputerStrategy, HumanStrategy, decisionView, firstLegalDecision } from '../src/game/strategy.ts'
 import { TileInstance, tileCatalog, tileKinds } from '../src/game/tiles.ts'
+
+function boardView(state) { return renderBoard(state.board, state.players) }
 
 function configuration(controls = ['human', 'human', 'computer'], seed = 1, startingPlayerIndex = controls.length - 1) {
   return { players: controls.map((control, index) => ({ name: `Jogador ${index + 1}`, color: playerColors[index], control })), seed, startingPlayerIndex }
@@ -23,9 +26,9 @@ function scenario(placements, tile, configurePlayers = (players) => players, rem
   const base = start()
   const model = placements.reduce((board, [id, kind, rotation, x, y]) => board.place(new TileInstance(id, kind, rotation), new Position(x, y)), new GameBoard())
   const players = configurePlayers(base.snapshot.players)
-  const board = Object.fromEntries(model.placements.map(({ tile, position }) => [position.key, { kind: tile.kind, rotation: tile.rotation, variant: tile.variant }]))
+  const board = boardSnapshot(model, players.flatMap(({ followers }) => followers))
   return new GameSession({
-    ...base.snapshot, players, model, board, mesh: new StructureMesh(model, players.flatMap(({ followers }) => followers)),
+    ...base.snapshot, players, model, board, mesh: new StructureMesh(model, players.flatMap(({ followers }) => followers), players),
     deck: [tile, ...remaining], deckIndex: 0, discarded: [],
   }, new InProgressState(), base.configuration)
 }
@@ -45,7 +48,7 @@ test('cada assento recebe sua estratégia e configuração inválida não inicia
   assert.ok(Object.isFrozen(match.snapshot.players[2].strategy))
   for (const controls of [['invalid', 'computer'], ['human', 'invalid']]) {
     const invalid = GameSession.configure().start(configuration(controls))
-    assert.equal(invalid.snapshot.phase, 'configure')
+    assert.equal(invalid.phase, 'configure')
     assert.ok(invalid.snapshot.message)
     assert.equal(invalid.snapshot.model.size, 0)
   }
@@ -73,7 +76,9 @@ test('turno automático bloqueia comandos humanos e rejeita decisões inválidas
     assert.equal(operation(), match)
   }
   for (const decision of [null, { ...valid, tileId: 'outra' }, { ...valid, rotation: 45 }, { ...valid, position: '0,0' },
-    { ...valid, position: '9999,9999' }, { ...valid, position: 'NaN,0' }, { ...valid, regionId: 'inexistente' }]) {
+    { ...valid, position: '9999,9999' }, { ...valid, position: 'NaN,0' },
+    { ...valid, position: { x: NaN, y: 0 } }, { ...valid, position: { x: 0.5, y: 0 } },
+    { ...valid, position: { x: 9007199254740992, y: 0 } }, { ...valid, regionId: 'inexistente' }]) {
     assert.equal(match.playComputerTurn(decision), match)
   }
   const after = match.playComputerTurn(valid)
@@ -91,13 +96,13 @@ test('IA considera rotações e ocupa cidade livre que fecha com brasão, recebe
     ['a', 'city-corner', 90, 0, 0], ['b', 'city-corner', 180, 1, 0], ['c', 'city-corner', 270, 1, 1],
   ], new TileInstance('drawn', 'city-corner', 180, 'shield'))
   const decision = choose(match)
-  assert.deepEqual(decision, { tileId: 'drawn', position: '0,1', rotation: 0, regionId: 'city' })
+  assert.deepEqual(decision, { tileId: 'drawn', position: new Position(0, 1), rotation: 0, regionId: 'city' })
   const after = match.playComputerTurn(decision)
-  assert.equal(after.snapshot.phase, 'finished')
+  assert.equal(after.phase, 'finished')
   assert.equal(after.snapshot.players[2].score, 10)
   assert.equal(after.snapshot.players[2].meeples, 7)
-  assert.equal(after.snapshot.board['0,1'].variant, 'shield')
-  assert.equal(after.snapshot.winners[0], after.snapshot.players[2].id)
+  assert.equal(boardView(after.snapshot)['0,1'].variant, 'shield')
+  assert.equal(after.snapshot.winners[0].id, after.snapshot.players[2].id)
   assert.equal(after.playComputerTurn(decision), after)
 })
 
@@ -105,8 +110,8 @@ test('IA não coloca seguidor em cidade ocupada por humano e evita presenteá-lo
   const match = scenario([['a', 'city', 0, 0, 0]], new TileInstance('drawn', 'city'), (players) => players.map((player, index) => index === 0
     ? { ...player, meeples: 6, followers: player.followers.map((follower, index) => index === 0 ? follower.allocate('a', 'city', 'knight') : follower) }
     : player), [new TileInstance('next', 'road')])
-  assert.notEqual(choose(match).position, '0,-1')
-  const illegal = { tileId: 'drawn', position: '0,-1', rotation: 180, regionId: 'city' }
+  assert.notEqual(choose(match).position.key, '0,-1')
+  const illegal = { tileId: 'drawn', position: new Position(0, -1), rotation: 180, regionId: 'city' }
   assert.equal(match.playComputerTurn(illegal), match)
   const legal = match.playComputerTurn({ ...illegal, regionId: null })
   assert.equal(legal.snapshot.players[0].score, 4)
@@ -121,7 +126,7 @@ test('IA continua jogando sem seguidores na reserva', () => {
     : player))
   const decision = choose(match)
   assert.equal(decision.regionId, null)
-  assert.equal(match.playComputerTurn(decision).snapshot.phase, 'finished')
+  assert.equal(match.playComputerTurn(decision).phase, 'finished')
 })
 
 test('IA e humano empatados na mesma cidade recebem a pontuação integral sem privilégios', () => {
@@ -131,7 +136,7 @@ test('IA e humano empatados na mesma cidade recebem a pontuação integral sem p
     ...player, meeples: 6, followers: player.followers.map((follower, slot) => slot === 0 ? follower.allocate(index === 0 ? 'a' : 'b', 'city', 'knight') : follower),
   }), [new TileInstance('next', 'road')])
   const decision = choose(match)
-  assert.equal(decision.position, '0,-1')
+  assert.equal(decision.position.key, '0,-1')
   assert.equal(decision.rotation, 90)
   assert.notEqual(decision.regionId, 'city')
   const after = match.playComputerTurn(decision)
@@ -146,9 +151,9 @@ test('na última compra a IA pode escolher fazendeiro para pontuar cidade já co
   const decision = choose(match)
   assert.ok(decision.regionId?.startsWith('field-'))
   const after = match.playComputerTurn(decision)
-  assert.equal(after.snapshot.phase, 'finished')
+  assert.equal(after.phase, 'finished')
   assert.equal(after.snapshot.players[2].score, 3)
-  assert.ok(after.snapshot.scoring.some(({ terrain, final, points, winners }) => terrain === 'field' && final && points === 3 && winners.includes(after.snapshot.players[2].id)))
+  assert.ok(after.snapshot.scoring.some(({ terrain, final, points, playerId }) => terrain === 'field' && final && points === 3 && playerId === after.snapshot.players[2].id))
 })
 
 test('IA completa a vizinhança de seu mosteiro e recupera o monge', () => {
@@ -158,7 +163,7 @@ test('IA completa a vizinhança de seu mosteiro e recupera o monge', () => {
     ...player, meeples: 6, followers: player.followers.map((follower, slot) => slot === 0 ? follower.allocate('m0', 'monastery', 'monk') : follower),
   } : player), [new TileInstance('next', 'road')])
   const decision = choose(match)
-  assert.equal(decision.position, '1,1')
+  assert.equal(decision.position.key, '1,1')
   const after = match.playComputerTurn(decision)
   assert.equal(after.snapshot.players[2].score, 9)
   assert.equal(after.snapshot.players[2].followers[0].status, 'reserve')
@@ -171,11 +176,11 @@ test('descarte mantém a vez da IA e esgotamento encerra sem pedir decisão', ()
   assert.equal(entered.snapshot.currentPlayerIndex, 2)
   assert.equal(choose(entered).tileId, 'playable')
   const finished = entered.playComputerTurn(choose(entered))
-  assert.equal(finished.snapshot.phase, 'finished')
+  assert.equal(finished.phase, 'finished')
   assert.equal(finished.computerTurn, false)
   assert.equal(decisionView(finished.snapshot), null)
   const exhausted = new InProgressState().enter(scenario([['a', 'monastery', 0, 0, 0]], new TileInstance('impossible', 'city-center')))
-  assert.equal(exhausted.snapshot.phase, 'finished')
+  assert.equal(exhausted.phase, 'finished')
 })
 
 test('nova partida conserva os controles e limpa tabuleiro, seguidores e decisões anteriores', () => {
@@ -197,7 +202,7 @@ test('partidas mistas completas respeitam turnos, inventário, reservas e pontua
     let match = start(controls, seed, starter)
     let turns = 0
     let automaticTurns = 0
-    while (match.snapshot.phase !== 'finished') {
+    while (match.phase !== 'finished') {
       const before = match.snapshot
       if (match.computerTurn) {
         match = match.playComputerTurn(choose(match))
@@ -205,21 +210,21 @@ test('partidas mistas completas respeitam turnos, inventário, reservas e pontua
       } else {
         const move = before.model.getValidMoves(before.deck[before.deckIndex])[(turns * 17) % before.model.getValidMoves(before.deck[before.deckIndex]).length]
         while (match.snapshot.rotation !== move.tile.rotation) match = match.rotate(1)
-        match = match.place(move.position.key)
+        match = match.place(move.position)
         const choice = getFollowerChoices(match.snapshot).find(({ available }) => available)
         if (choice && turns % 3 !== 0) match = match.selectFollower(choice.id)
         if (turns % 5 === 0) {
           match = match.undo()
-          assert.equal(match.snapshot.model, before.model)
+          assert.deepEqual(match.snapshot.model.placements, before.model.placements)
           assert.deepEqual(match.snapshot.players, before.players)
-          match = match.place(move.position.key)
+          match = match.place(move.position)
         }
         match = match.confirm()
       }
       const after = match.snapshot
       assert.ok(after.deckIndex > before.deckIndex)
       assert.equal(after.model.size, before.model.size + 1)
-      if (after.phase !== 'finished') assert.equal(after.currentPlayerIndex, (before.currentPlayerIndex + 1) % controls.length)
+      if (after.winners.length === 0) assert.equal(after.currentPlayerIndex, (before.currentPlayerIndex + 1) % controls.length)
       assert.equal(after.pendingPosition, null)
       const tiles = [...after.model.placements.map(({ tile }) => tile), ...after.discarded, ...after.deck.slice(after.deckIndex)]
       assert.equal(tiles.length, 72)
@@ -229,15 +234,15 @@ test('partidas mistas completas respeitam turnos, inventário, reservas e pontua
       for (const player of after.players) {
         assert.equal(player.followers.length, 7)
         assert.equal(player.meeples, player.followers.filter(({ status }) => status === 'reserve').length)
-        assert.equal(player.score, after.scoring.filter(({ winners }) => winners.includes(player.id)).reduce((sum, record) => sum + record.points, 0))
+        assert.equal(player.score, after.scoring.filter(({ playerId }) => playerId === player.id).reduce((sum, record) => sum + record.points, 0))
       }
-      assert.equal(new Set(after.scoring.map(({ id }) => id)).size, after.scoring.length)
+      assert.equal(new Set(after.scoring.map(({ structureId, playerId }) => `${structureId}:${playerId}`)).size, after.scoring.length)
       assert.ok(++turns <= 71)
     }
     assert.ok(automaticTurns > 0)
     assert.ok(match.snapshot.players.every(({ meeples }) => meeples === 7))
     const maximum = Math.max(...match.snapshot.players.map(({ score }) => score))
-    assert.deepEqual(match.snapshot.winners, match.snapshot.players.filter(({ score }) => score === maximum).map(({ id }) => id))
+    assert.deepEqual(match.snapshot.winners, match.snapshot.players.filter(({ score }) => score === maximum))
   }
 })
 
@@ -357,7 +362,7 @@ test('worker de produção recebe dados serializados e retorna uma decisão vál
     })
     worker.postMessage(decisionView(match.snapshot))
     const decision = await response
-    assert.deepEqual(decision, choose(match))
+    assert.deepEqual(decision, structuredClone(choose(match)))
     assert.notEqual(match.playComputerTurn(decision), match)
   } finally {
     await worker.terminate()
@@ -369,7 +374,7 @@ test('mesas de duas ou cinco IAs avançam pelo agendamento até o fim sem açõe
   for (const count of [2, 5]) {
     let current = start(Array(count).fill('computer'), 23, count - 1)
     let turns = 0
-    while (current.snapshot.phase !== 'finished') {
+    while (current.phase !== 'finished') {
       const expected = current
       const before = current.snapshot
       assert.ok(current.computerTurn)
@@ -386,7 +391,7 @@ test('mesas de duas ou cinco IAs avançam pelo agendamento até o fim sem açõe
       assert.ok(worker.terminated)
       assert.ok(after.deckIndex > before.deckIndex)
       assert.equal(after.model.size, before.model.size + 1)
-      if (after.phase !== 'finished') assert.equal(after.currentPlayerIndex, (before.currentPlayerIndex + 1) % count)
+      if (after.winners.length === 0) assert.equal(after.currentPlayerIndex, (before.currentPlayerIndex + 1) % count)
       assert.equal(after.pendingPosition, null)
       const inventory = [...after.model.placements.map(({ tile }) => tile), ...after.discarded, ...after.deck.slice(after.deckIndex)]
       assert.equal(inventory.length, 72)
@@ -397,13 +402,24 @@ test('mesas de duas ou cinco IAs avançam pelo agendamento até o fim sem açõe
     assert.ok(current.snapshot.winners.length > 0)
     for (const player of current.snapshot.players) {
       assert.equal(player.meeples, 7)
-      assert.equal(player.score, current.snapshot.scoring.filter(({ winners }) => winners.includes(player.id)).reduce((sum, record) => sum + record.points, 0))
+      assert.equal(player.score, current.snapshot.scoring.filter(({ playerId }) => playerId === player.id).reduce((sum, record) => sum + record.points, 0))
     }
     scheduleComputerTurn(current, () => assert.fail('partida encerrada'), () => assert.fail('worker após o fim'))
     context.mock.timers.tick(10000)
     const fresh = current.newGame()
-    assert.equal(fresh.snapshot.phase, 'configure')
+    assert.equal(fresh.phase, 'configure')
     assert.ok(fresh.configuration.players.every(({ control }) => control === 'computer'))
     assert.ok(fresh.start().computerTurn)
   }
+})
+
+test('o comando automático sem argumento calcula a estratégia do assento e mantém a decisão equivalente', () => {
+  const match = start(['computer', 'computer'], 5, 0)
+  const explicit = match.playComputerTurn(choose(match))
+  const automatic = match.playComputerTurn()
+  assert.deepEqual(automatic.snapshot.model.placements, explicit.snapshot.model.placements)
+  assert.deepEqual(automatic.snapshot.players, explicit.snapshot.players)
+  assert.equal(automatic.snapshot.deckIndex, explicit.snapshot.deckIndex)
+  assert.equal(automatic.snapshot.currentPlayerIndex, explicit.snapshot.currentPlayerIndex)
+  assert.equal(match.snapshot.model.size, 1)
 })

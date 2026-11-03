@@ -12,7 +12,7 @@ test('cada modelo cobre a borda inteira sem sobrepor regiões', () => {
     assert.equal(new Set(regions.map((region) => region.id)).size, regions.length, kind)
     assert.deepEqual(regions.flatMap((region) => region.ports).sort(), [...ports].sort(), kind)
     assert.ok(Number.isInteger(quantity) && quantity > 0, kind)
-    assert.ok([1, 2, 4].includes(imageRotations), kind)
+    assert.ok([1, 2, 4].includes(imageRotations.length) && imageRotations.every((angle) => rotations.includes(angle)), kind)
 
     for (const region of regions) {
       assert.ok(Number.isInteger(region.shields) && region.shields >= 0, kind)
@@ -143,7 +143,7 @@ test('o catálogo permanece protegido contra alterações e todas as imagens exi
       assert.ok(Object.isFrozen(region.adjacentCities))
     }
     for (const rotation of rotations) {
-      const index = rotation / 90 % definition.imageRotations
+      const index = rotation / 90 % definition.imageRotations.length
       assert.ok(existsSync(new URL(`../src/assets/pieces/${definition.source}${index}.webp`, import.meta.url)))
     }
     const tile = new TileInstance('tile', kind)

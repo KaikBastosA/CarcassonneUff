@@ -1,13 +1,16 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { renderBoard } from '../src/game/board-state.ts'
 import { initialGame, withTile } from './helpers/game.mjs'
 import { placeGameTile, selectGameFollower, undoGamePlacement } from '../src/game/actions.ts'
 import { Position } from '../src/game/position.ts'
 
+function boardView(state) { return renderBoard(state.board, state.players) }
+
 test('a nova interface começa com o mesmo tabuleiro válido do domínio', () => {
   assert.equal(initialGame.model.size, 1)
-  assert.deepEqual(Object.keys(initialGame.board), ['0,0'])
-  assert.equal(initialGame.model.tileAt(new Position(0, 0)).kind, initialGame.board['0,0'].kind)
+  assert.deepEqual(Object.keys(boardView(initialGame)), ['0,0'])
+  assert.equal(initialGame.model.tileAt(new Position(0, 0)).kind, boardView(initialGame)['0,0'].kind)
 })
 
 test('a ação da interface recusa encaixes inválidos sem alterar o mapa ou a etapa', () => {
@@ -27,14 +30,14 @@ test('colocar e desfazer mantém o mapa visual sincronizado com o modelo', () =>
   const placed = placeGameTile(state, '1,0')
   assert.equal(placed.phase, 'meeple')
   assert.equal(placed.model.size, 2)
-  assert.equal(placed.previousBoard, state.model)
-  assert.equal(placed.pendingPosition, '1,0')
+  assert.equal(placed.previousBoard, state.board)
+  assert.equal(placed.pendingPosition.key, '1,0')
   assert.equal(placed.model.tileAt(new Position(1, 0)).rotation, 90)
-  assert.deepEqual(placed.board['1,0'], { kind: 'road', rotation: 90, variant: 'plain' })
+  assert.deepEqual(boardView(placed)['1,0'], { kind: 'road', rotation: 90, variant: 'plain', meeple: undefined, meepleRegion: undefined })
   assert.equal(placeGameTile(placed, '2,0'), placed)
 
   const undone = undoGamePlacement(placed)
-  assert.equal(undone.model, state.model)
+  assert.deepEqual(undone.model.placements, state.model.placements)
   assert.deepEqual(undone.board, state.board)
   assert.equal(undone.phase, 'place')
   assert.equal(undone.previousBoard, null)
@@ -49,8 +52,8 @@ test('desfazer uma colocação com meeple devolve a reserva sem alterar o histó
   const undone = undoGamePlacement(withMeeple)
   assert.deepEqual(undone.players, state.players)
   assert.deepEqual(undone.board, state.board)
-  assert.equal(undone.model, state.model)
-  assert.ok(withMeeple.board['1,0'].meeple)
+  assert.deepEqual(undone.model.placements, state.model.placements)
+  assert.ok(boardView(withMeeple)['1,0'].meeple)
   assert.equal(withMeeple.model.size, 2)
 })
 
@@ -70,4 +73,23 @@ test('os avisos de espaços sem encaixe são preservados pela nova ação da int
     }
     state = { ...state, deckIndex: state.deckIndex + 1 }
   }
+})
+
+test('snapshots do tabuleiro guardam cartelas, seguidores e limites sem misturar o mapa de renderização', () => {
+  const placed = selectGameFollower(placeGameTile(withTile(initialGame, 'city', 180), new Position(0, -1)), 'city')
+  assert.ok(placed.pendingPosition instanceof Position)
+  assert.equal(placed.previousBoard, initialGame.board)
+  assert.deepEqual(placed.board.tiles, placed.model.placements.map(({ tile }) => tile))
+  assert.deepEqual(placed.board.followers, placed.players.flatMap(({ followers }) => followers))
+  assert.deepEqual(placed.board.bounds, { minX: 0, minY: -1, maxX: 0, maxY: 0 })
+  assert.equal(placed.board.followers.filter(({ allocation }) => allocation).length, 1)
+  assert.ok(Object.isFrozen(placed.board))
+  assert.ok(Object.isFrozen(placed.board.tiles))
+  assert.ok(Object.isFrozen(placed.board.followers))
+  assert.ok(Object.isFrozen(placed.board.bounds))
+  assert.equal(placed.board['0,-1'], undefined)
+  assert.equal(boardView(placed)['0,-1'].meeple, placed.players[0].color)
+  const undone = undoGamePlacement(placed)
+  assert.equal(undone.board, placed.previousBoard)
+  assert.equal(undone.board.followers.filter(({ allocation }) => allocation).length, 0)
 })

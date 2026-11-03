@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { Worker } from 'node:worker_threads'
 import { playerColors } from '../src/game.ts'
+import { Position } from '../src/game/position.ts'
 import { GameSession, InProgressState } from '../src/game/session.ts'
 import { ComputerStrategy, StrategicComputerStrategy, decisionView } from '../src/game/strategy.ts'
 import { lookAhead, unknownTiles } from '../src/game/planning.ts'
@@ -27,9 +28,9 @@ function play(match, decision) {
 function opening() {
   let match = GameSession.configure().start(configuration())
   for (const decision of [
-    { tileId: 'city-11', position: '0,-1', rotation: 180, regionId: 'city' },
-    { tileId: 'road-9', position: '1,0', rotation: 90, regionId: 'road' },
-    { tileId: 'road-2', position: '-1,-1', rotation: 0, regionId: null },
+    { tileId: 'city-11', position: new Position(0, -1), rotation: 180, regionId: 'city' },
+    { tileId: 'road-9', position: new Position(1, 0), rotation: 90, regionId: 'road' },
+    { tileId: 'road-2', position: new Position(-1, -1), rotation: 0, regionId: null },
   ]) match = play(match, decision)
   return match
 }
@@ -58,7 +59,7 @@ test('dificuldade é validada por assento, usa básico por padrão e sobrevive �
   const invalid = configuration()
   invalid.players[2].difficulty = 'impossible'
   const rejected = GameSession.configure().start(invalid)
-  assert.equal(rejected.snapshot.phase, 'configure')
+  assert.equal(rejected.phase, 'configure')
   assert.match(rejected.snapshot.message, /Dificuldade/)
   const legacy = configuration(2)
   delete legacy.players[1].difficulty
@@ -99,14 +100,14 @@ test('nível estratégico muda uma decisão imediata e melhora o resultado após
   const immediate = basic.chooseTurn(view)
   const planned = strategic.chooseTurn(view)
   assert.notDeepEqual(planned, immediate)
-  assert.equal(immediate.position, '0,-2')
-  assert.equal(planned.position, '1,-1')
+  assert.equal(immediate.position.key, '0,-2')
+  assert.equal(planned.position.key, '1,-1')
   const totals = [0, 0]
   for (const future of [match.snapshot.deck.slice(1), match.snapshot.deck.slice(1).reverse()]) {
     const base = new GameSession({ ...match.snapshot, deck: [match.snapshot.deck[0], ...future] }, new InProgressState(), match.configuration)
     for (const [index, decision] of [immediate, planned].entries()) {
       let result = play(base, decision)
-      while (result.snapshot.phase !== 'finished') result = play(result, basic.chooseTurn(decisionView(result.snapshot)))
+      while (result.phase !== 'finished') result = play(result, basic.chooseTurn(decisionView(result.snapshot)))
       totals[index] += result.snapshot.players.reduce((sum, player) => sum + player.score * (player.id === view.playerId ? 1 : -0.6), 0)
     }
   }
@@ -122,7 +123,7 @@ test('estratégico não consulta a ordem real, é reproduzível e continua legal
   const final = new GameSession({ ...match.snapshot, deck: [match.snapshot.deck[0]], discarded: [...match.snapshot.discarded, ...match.snapshot.deck.slice(1)] }, new InProgressState(), match.configuration)
   const decision = strategic.chooseTurn(decisionView(final.snapshot))
   assert.deepEqual(decision, basic.chooseTurn(decisionView(final.snapshot)))
-  assert.equal(play(final, decision).snapshot.phase, 'finished')
+  assert.equal(play(final, decision).phase, 'finished')
 })
 
 test('uma partida completa com humano, IA básica e estratégica conserva regras e inventário', (context) => {
@@ -130,7 +131,7 @@ test('uma partida completa com humano, IA básica e estratégica conserva regras
   let turns = 0
   let strategicTurns = 0
   let slowest = 0
-  while (match.snapshot.phase !== 'finished') {
+  while (match.phase !== 'finished') {
     const before = match.snapshot
     const player = before.players[before.currentPlayerIndex]
     const observation = decisionView(before)
@@ -146,7 +147,7 @@ test('uma partida completa com humano, IA básica e estratégica conserva regras
     const after = match.snapshot
     assert.ok(after.deckIndex > before.deckIndex)
     assert.equal(after.model.size, before.model.size + 1)
-    if (after.phase !== 'finished') assert.equal(after.currentPlayerIndex, (before.currentPlayerIndex + 1) % 3)
+    if (after.winners.length === 0) assert.equal(after.currentPlayerIndex, (before.currentPlayerIndex + 1) % 3)
     const inventory = [...after.model.placements.map(({ tile }) => tile), ...after.discarded, ...after.deck.slice(after.deckIndex)]
     assert.equal(inventory.length, 72)
     assert.equal(new Set(inventory.map(({ id }) => id)).size, 72)
@@ -155,7 +156,7 @@ test('uma partida completa com humano, IA básica e estratégica conserva regras
     for (const player of after.players) {
       assert.equal(player.followers.length, 7)
       assert.equal(player.meeples, player.followers.filter(({ status }) => status === 'reserve').length)
-      assert.equal(player.score, after.scoring.filter(({ winners }) => winners.includes(player.id)).reduce((sum, record) => sum + record.points, 0))
+      assert.equal(player.score, after.scoring.filter(({ playerId }) => playerId === player.id).reduce((sum, record) => sum + record.points, 0))
     }
     assert.ok(++turns <= 71)
   }
@@ -176,7 +177,7 @@ test('worker seleciona a dificuldade estratégica da solicitação e devolve a m
     const response = new Promise((resolve, reject) => { worker.once('message', resolve); worker.once('error', reject) })
     worker.postMessage(view)
     const decision = await response
-    assert.deepEqual(decision, strategic.chooseTurn(view))
+    assert.deepEqual(decision, structuredClone(strategic.chooseTurn(view)))
   } finally {
     await worker.terminate()
   }
@@ -184,7 +185,7 @@ test('worker seleciona a dificuldade estratégica da solicitação e devolve a m
 
 test('estratégico lida com tabuleiro avançado de cinco jogadores sem ultrapassar as regras', (context) => {
   let match = GameSession.configure().start(configuration(5, 41))
-  for (let turn = 0; turn < 50 && match.snapshot.phase !== 'finished'; turn++) {
+  for (let turn = 0; turn < 50 && match.phase !== 'finished'; turn++) {
     match = play(match, basic.chooseTurn(decisionView(match.snapshot)))
   }
   assert.equal(match.snapshot.phase, 'place')
@@ -216,7 +217,7 @@ test('IA básica e estratégica disputam uma partida completa sem jogador humano
   let match = GameSession.configure().start(config)
   let turns = 0
   const played = new Set()
-  while (match.snapshot.phase !== 'finished') {
+  while (match.phase !== 'finished') {
     const before = match.snapshot
     const player = before.players[before.currentPlayerIndex]
     assert.ok(match.computerTurn)
@@ -226,7 +227,7 @@ test('IA básica e estratégica disputam uma partida completa sem jogador humano
     const after = match.snapshot
     assert.ok(after.deckIndex > before.deckIndex)
     assert.equal(after.model.size, before.model.size + 1)
-    if (after.phase !== 'finished') assert.equal(after.currentPlayerIndex, 1 - before.currentPlayerIndex)
+    if (after.winners.length === 0) assert.equal(after.currentPlayerIndex, 1 - before.currentPlayerIndex)
     assert.ok(++turns <= 71)
   }
   assert.deepEqual([...played].sort(), ['basic', 'strategic'])
@@ -234,7 +235,7 @@ test('IA básica e estratégica disputam uma partida completa sem jogador humano
   assert.equal(match.computerTurn, false)
   for (const player of match.snapshot.players) {
     assert.equal(player.meeples, 7)
-    assert.equal(player.score, match.snapshot.scoring.filter(({ winners }) => winners.includes(player.id)).reduce((sum, record) => sum + record.points, 0))
+    assert.equal(player.score, match.snapshot.scoring.filter(({ playerId }) => playerId === player.id).reduce((sum, record) => sum + record.points, 0))
   }
   const fresh = match.newGame()
   assert.deepEqual(fresh.configuration.players.map(({ difficulty }) => difficulty), ['strategic', 'basic'])

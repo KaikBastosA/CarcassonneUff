@@ -10,8 +10,10 @@ import { TileInstance } from './tiles.ts'
 import type { Rotation, TileKind, TileVariant } from './tiles.ts'
 import { lookAhead } from './planning.ts'
 
-export type PlayerControl = 'human' | 'computer'
-export type ComputerDifficulty = 'basic' | 'strategic'
+export type ControlType = 'human' | 'computer'
+export type Difficulty = 'basic' | 'strategic'
+export type PlayerControl = ControlType
+export type ComputerDifficulty = Difficulty
 
 export const difficultyNames: Readonly<Record<ComputerDifficulty, string>> = Object.freeze({ basic: 'Básico', strategic: 'Estratégico' })
 
@@ -35,9 +37,9 @@ export interface DecisionView {
 
 export interface TurnDecision {
   readonly tileId: string
-  readonly position: string
+  readonly position: Position
   readonly rotation: Rotation
-  readonly regionId: string | null
+  readonly regionId?: string | null
 }
 
 export interface PlayerStrategy {
@@ -87,7 +89,7 @@ export class ComputerStrategy implements PlayerStrategy {
     const geometries = new Map<string, string>()
     for (const { tile, position } of board.getValidMoves(drawn)) {
       const mesh = new StructureMesh(board.place(tile, position), followers)
-      const evaluation = mesh.structures.reduce((total, structure) => total + evaluateStructure(structure, structure.majority(), view), 0)
+      const evaluation = mesh.structures.reduce((total, structure) => total + evaluateStructure(structure, structure.majorityIds(), view), 0)
       const choices: { regionId: string | null; gain: number }[] = [{ regionId: null, gain: 0 }]
       if (reserve > 0) {
         const seen = new Set<string>()
@@ -116,7 +118,7 @@ export class ComputerStrategy implements PlayerStrategy {
           if (seenMoves.has(key)) continue
           seenMoves.add(key)
         }
-        ranked.push({ decision: { tileId: tile.id, position: position.key, rotation: tile.rotation, regionId }, value: score })
+        ranked.push({ decision: { tileId: tile.id, position, rotation: tile.rotation, regionId }, value: score })
         ranked.sort((a, b) => b.value - a.value)
         if (ranked.length > limit) ranked.pop()
       }
@@ -170,5 +172,5 @@ export function firstLegalDecision(view: DecisionView): TurnDecision | null {
   const board = restoreBoard(view)
   const tile = new TileInstance(view.tile.id, view.tile.kind, view.tile.rotation, view.tile.variant)
   const move = board.getValidMoves(tile)[0]
-  return move ? { tileId: tile.id, rotation: move.tile.rotation, position: move.position.key, regionId: null } : null
+  return move ? { tileId: tile.id, rotation: move.tile.rotation, position: move.position, regionId: null } : null
 }

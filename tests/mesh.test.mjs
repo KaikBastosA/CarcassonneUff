@@ -28,7 +28,7 @@ test('cada região de cada modelo pertence a uma única estrutura nas quatro ori
       assert.ok(structure instanceof classes[region.terrain])
       assert.equal(structure.role, roles[region.terrain])
       assert.equal(structure.regions.length, 1)
-      assert.deepEqual(structure.majority(), [])
+      assert.deepEqual(structure.majorityIds(), [])
     }
     assert.equal(mesh.structureAt(tile.id, 'missing'), undefined)
   }
@@ -128,7 +128,7 @@ test('os sete seguidores possuem identidade, reserva e papel associados à estru
   const followers = createFollowers('blue')
   assert.equal(followers.length, 7)
   assert.equal(new Set(followers.map((follower) => follower.id)).size, 7)
-  assert.ok(followers.every((follower) => follower.status === 'reserve' && follower.role === 'none'))
+  assert.ok(followers.every((follower) => follower.status === 'reserve' && follower.role === undefined))
   const mesh = new StructureMesh(boardOf([[0, 0, 'city-road']]))
   const follower = mesh.allocateFollower(followers[0], '0,0', 'road')
   assert.equal(follower.ownerId, 'blue')
@@ -146,7 +146,7 @@ test('ocupação é bloqueada em toda a estrutura, inclusive para o dono origina
   assert.throws(() => mesh.allocateFollower(new Follower('red-1', 'red'), '0,2', 'road'), /conectado/)
   assert.throws(() => mesh.allocateFollower(new Follower('blue-2', 'blue'), '0,2', 'road'), /conectado/)
   assert.equal(mesh.allocateFollower(new Follower('red-1', 'red'), '0,2', 'field-east').role, 'farmer')
-  assert.deepEqual(mesh.structureAt('0,2', 'road').majority(), ['blue'])
+  assert.deepEqual(mesh.structureAt('0,2', 'road').majorityIds(), ['blue'])
 })
 
 test('uniões de estradas ocupadas preservam seguidores, maioria e empates', () => {
@@ -162,7 +162,7 @@ test('uniões de estradas ocupadas preservam seguidores, maioria e empates', () 
   const mesh = new StructureMesh(board, [blue, red])
   const road = mesh.structureAt('bridge', 'road')
   assert.equal(road.followers.length, 2)
-  assert.deepEqual([...road.majority()].sort(), ['blue', 'red'])
+  assert.deepEqual([...road.majorityIds()].sort(), ['blue', 'red'])
   assert.throws(() => mesh.allocateFollower(new Follower('third', 'blue'), 'bridge', 'road'), /conectado/)
   assert.equal(before.structureAt('0,0', 'road').followers.length, 1)
 })
@@ -176,7 +176,7 @@ test('uniões de campos preservam fazendeiros antes separados pela estrada', () 
   const capped = base.place(new TileInstance('cap', 'road-end', 180), new Position(0, 2))
   const mesh = new StructureMesh(capped, [east, west])
   assert.equal(mesh.structureAt('cap', 'field').followers.length, 2)
-  assert.deepEqual([...mesh.structureAt('cap', 'field').majority()].sort(), ['blue', 'red'])
+  assert.deepEqual([...mesh.structureAt('cap', 'field').majorityIds()].sort(), ['blue', 'red'])
 })
 
 test('uma fusão de cidades não duplica cartelas nem cidades adjacentes aos campos', () => {
@@ -196,7 +196,7 @@ test('uma fusão de cidades não duplica cartelas nem cidades adjacentes aos cam
   assert.equal(city.regions.length, 9)
   assert.equal(city.followers.length, 2)
   assert.equal(mesh.structureAt('0,0', 'field').adjacentCityIds.length, 1)
-  assert.deepEqual([...city.majority()].sort(), ['blue', 'red'])
+  assert.deepEqual([...city.majorityIds()].sort(), ['blue', 'red'])
 })
 
 test('a maioria considera vários seguidores do mesmo dono após unir três estradas', () => {
@@ -211,7 +211,7 @@ test('a maioria considera vários seguidores do mesmo dono após unir três estr
   ]
   const mesh = new StructureMesh(base.place(new TileInstance('bridge', 'crossroads'), new Position(2, 1)), followers)
   assert.equal(mesh.structureAt('bridge', 'road').followers.length, 3)
-  assert.deepEqual(mesh.structureAt('bridge', 'road').majority(), ['blue'])
+  assert.deepEqual(mesh.structureAt('bridge', 'road').majorityIds(), ['blue'])
 })
 
 test('a malha recusa referências de seguidores inválidas sem perder alocações', () => {
@@ -239,4 +239,73 @@ test('cidades que se tocam apenas pela diagonal não são fundidas', () => {
   const blue = mesh.allocateFollower(new Follower('blue', 'blue'), '0,0', 'city')
   const occupied = new StructureMesh(board, [blue])
   assert.equal(occupied.allocateFollower(new Follower('red', 'red'), '1,-1', 'city').role, 'knight')
+})
+
+test('contrato do diagrama aloca em nova malha e resolve a maioria para os jogadores reais', () => {
+  const board = boardOf([[0, 0, 'road']])
+  const tile = board.tileAt(new Position(0, 0))
+  const reserve = createFollowers('blue')
+  const player = { id: 'blue', name: 'Azul', color: 'blue', score: 0, meeples: 7, followers: reserve,
+    strategy: { automatic: false, difficulty: 'basic', chooseTurn() { return null } } }
+  const before = new StructureMesh(board, reserve, [player])
+  const allocation = { tileId: tile.id, regionId: 'road', role: 'thief' }
+  const after = before.allocateFollower(reserve[0], allocation)
+  assert.ok(after instanceof StructureMesh)
+  assert.notEqual(after, before)
+  assert.equal(before.followers[0], reserve[0])
+  assert.equal(before.followers[0].status, 'reserve')
+  assert.equal(after.followers[0].status, 'allocated')
+  assert.equal(after.followers[0].role, 'thief')
+  assert.equal(before.structuresOf(tile).find((structure) => structure.terrain === 'road').followers.length, 0)
+  const road = after.structuresOf(tile).find((structure) => structure.terrain === 'road')
+  assert.equal(after.structureAt(road.regions[0]), road)
+  assert.equal(road.majority()[0], player)
+  assert.deepEqual(road.majority(), [player])
+  assert.equal(road.validarOcupacao(), false)
+  assert.equal(road.verificarConclusao(), false)
+  assert.equal(road.pontuar(true), 1)
+  assert.throws(() => after.allocateFollower(reserve[1], allocation), /já possui/)
+  assert.throws(() => before.allocateFollower(reserve[0], { ...allocation, role: 'farmer' }), /papel/)
+  assert.throws(() => { after.followers.push(reserve[1]) })
+  const released = after.devolverSeguidores([road])
+  assert.notEqual(released, after)
+  assert.equal(released.followers[0].status, 'reserve')
+  assert.equal(released.followers[0].role, undefined)
+  assert.equal(after.followers[0].status, 'allocated')
+})
+
+test('integração e consultas finais separam inacabadas ocupadas e campos com fazendeiros', () => {
+  const board = boardOf([[0, 0, 'road'], [0, 1, 'road'], [1, 0, 'monastery']])
+  const followers = [
+    new Follower('thief', 'blue').allocate({ tileId: '0,0', regionId: 'road', role: 'thief' }),
+    new Follower('farmer', 'red').allocate({ tileId: '0,1', regionId: 'field-east', role: 'farmer' }),
+  ]
+  const mesh = new StructureMesh(board, followers)
+  assert.equal(mesh.incompletasComSeguidor().length, 1)
+  assert.ok(mesh.incompletasComSeguidor()[0] instanceof Road)
+  assert.equal(mesh.fieldsWithFarmers().length, 1)
+  assert.ok(mesh.fieldsWithFarmers()[0] instanceof Field)
+  assert.equal(mesh.structures.filter((structure) => structure.followers.length === 0).length > 0, true)
+  const cap = new TileInstance('cap', 'road-end', 180)
+  const nextBoard = board.place(cap, new Position(0, 2))
+  const integrated = mesh.integrar(cap, nextBoard)
+  assert.notEqual(integrated, mesh)
+  assert.equal(mesh.structuresOf(cap).length, 0)
+  assert.ok(integrated.structuresOf(cap).length > 0)
+  assert.equal(integrated.followers[0], followers[0])
+  assert.deepEqual(integrated.completedAfter(new TileInstance('absent', 'road')), [])
+  assert.throws(() => mesh.integrar(cap, board), /antes da integração/)
+})
+
+test('completedAfter recebe a cartela que fecha um mosteiro por uma diagonal', () => {
+  let board = boardOf([[0, 0, 'monastery']])
+  for (const [x, y] of [[-1, 0], [-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1]]) {
+    board = board.place(new TileInstance(`${x},${y}`, 'monastery'), new Position(x, y))
+  }
+  const last = new TileInstance('last', 'monastery')
+  const next = board.place(last, new Position(-1, 1))
+  const mesh = new StructureMesh(next)
+  const monastery = mesh.structureAt('0,0', 'monastery')
+  assert.ok(mesh.completedAfter(last).includes(monastery))
+  assert.equal(monastery.verificarConclusao(), true)
 })
