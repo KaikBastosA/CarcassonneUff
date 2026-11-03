@@ -1,4 +1,5 @@
 import type { GameState } from '../game.ts'
+import { withEvents } from './actions.ts'
 import { createTileSet } from './tiles.ts'
 import type { TileInstance } from './tiles.ts'
 
@@ -23,25 +24,34 @@ export function createGameTiles(seed: number): { initial: TileInstance; deck: re
   return { initial, deck: shuffledTiles(tiles.filter(({ id }) => id !== initial.id), seed) }
 }
 
+export function comprarCartela(current: GameState): TileInstance | undefined {
+  return current.deck[current.deckIndex]
+}
+
+export function descartarCartela(current: GameState): GameState {
+  const tile = comprarCartela(current)
+  if (current.phase !== 'place' || !tile || current.model.getValidMoves(tile).length > 0) return current
+  const id = Math.max(0, ...current.events.map(({ id }) => id)) + 1
+  return withEvents({ ...current, deckIndex: current.deckIndex + 1, discarded: [...current.discarded, tile] }, [{
+    id, playerId: current.players[current.currentPlayerIndex].id,
+    text: 'descartou uma peça sem encaixe', round: current.round,
+  }, ...current.events])
+}
+
 export function drawPlayableTile(current: GameState): GameState {
   if (current.phase !== 'place') return current
-  let deckIndex = current.deckIndex
-  const discarded = [...current.discarded]
-  const activity = [...current.activity]
-  let eventId = Math.max(0, ...activity.map(({ id }) => id))
-  while (deckIndex < current.deck.length) {
-    const tile = current.deck[deckIndex]
-    const moves = current.model.getValidMoves(tile)
+  let next = current
+  let tile = comprarCartela(next)
+  while (tile) {
+    const moves = next.model.getValidMoves(tile)
     if (moves.length > 0) return {
-      ...current, deckIndex, discarded, activity, rotation: moves[0].tile.rotation,
-      message: discarded.length > current.discarded.length
-        ? `${discarded.length - current.discarded.length} cartelas sem encaixe descartadas. Nova peça comprada.`
+      ...next, rotation: moves[0].rotation,
+      message: next.discarded.length > current.discarded.length
+        ? `${next.discarded.length - current.discarded.length} cartelas sem encaixe descartadas. Nova peça comprada.`
         : current.message,
     }
-    discarded.push(tile)
-    activity.unshift({ id: ++eventId, playerId: current.players[current.currentPlayerIndex].id,
-      text: 'descartou uma peça sem encaixe', round: current.round })
-    deckIndex++
+    next = descartarCartela(next)
+    tile = comprarCartela(next)
   }
-  return { ...current, deckIndex, discarded, activity, rotation: 0 }
+  return { ...next, rotation: 0 }
 }

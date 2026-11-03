@@ -1,3 +1,5 @@
+import type { GameState } from '../game.ts'
+import type { Position } from './position.ts'
 import { applyComputerDecision } from './computer-turn.ts'
 import type { Observable, Observer } from './observable.ts'
 import { GameSession } from './session.ts'
@@ -10,15 +12,23 @@ export class GameStore implements Observable {
 
   constructor(match: GameSession = GameSession.configure()) {
     this.#match = match
+    this.subscribe = this.subscribe.bind(this)
   }
 
-  getSnapshot = (): GameSession => this.#match
+  getSnapshot = (): GameState => this.#match.snapshot
 
-  subscribe = (listener: () => void): (() => void) => this.add({ update: listener })
+  getSession = (): GameSession => this.#match
 
-  add(observer: Observer): () => void {
+  subscribe(observer: Observer): void
+  subscribe(listener: () => void): () => void
+  subscribe(listener: Observer | (() => void)): (() => void) | void {
+    const observer = typeof listener === 'function' ? { update: listener } : listener
+    this.add(observer)
+    if (typeof listener === 'function') return () => this.remove(observer)
+  }
+
+  add(observer: Observer): void {
     this.#observers.add(observer)
-    return () => this.remove(observer)
   }
 
   remove(observer: Observer): void {
@@ -45,11 +55,11 @@ export class GameStore implements Observable {
   }
 
   start = (configuration: MatchConfiguration): void => this.#publish(this.#match.start(configuration))
-  rotate = (direction: -1 | 1): void => this.#publish(this.#match.rotate(direction))
-  place = (position: string): void => this.#publish(this.#match.place(position))
-  selectFollower = (regionId: string | null): void => this.#publish(this.#match.selectFollower(regionId))
+  rotate = (direction: -1 | 1): void => this.#publish(this.#match.rotacionarCartela(direction))
+  place = (position: Position | string): void => this.#publish(this.#match.posicionarCartela(position))
+  selectFollower = (regionId: string | null): void => this.#publish(this.#match.selecionarSeguidor(regionId))
   undoPlacement = (): void => this.#publish(this.#match.undo())
-  confirm = (): void => this.#publish(this.#match.confirm())
+  confirm = (): void => this.#publish(this.#match.confirmarTurno())
   newGame = (): void => this.#publish(this.#match.newGame())
   playComputerTurn = (expected: GameSession, decision: TurnDecision | null): void => this.#publish(applyComputerDecision(this.#match, expected, decision))
 }

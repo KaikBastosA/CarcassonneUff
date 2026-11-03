@@ -9,7 +9,7 @@ export default function Tile({ kind, rotation, variant = 'plain', meeple, meeple
   return (
     <span className="tile">
       {art && <img className="tile-art" src={tileImage(kind)} style={{ transform: `rotate(${rotation}deg)` }} alt="" draggable={false} />}
-      {art && tile.shieldMarkers.map((anchor, index) => <img key={index} className="tile-shield" src={shieldImage}
+      {art && tile.markers.map((anchor, index) => <img key={index} className="tile-shield" src={shieldImage}
         alt="Brasão" title="Brasão: +2 pontos na cidade completa ou +1 na incompleta ao final"
         draggable={false} style={{ left: `${anchor.x * 100}%`, top: `${anchor.y * 100}%`, transform: `translate(-50%, -50%) rotate(${rotation}deg)` }} />)}
       {meeple && <span className="tile-meeple" style={region ? {

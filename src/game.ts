@@ -5,7 +5,10 @@ import type { StructureMesh } from './game/mesh.ts'
 import type { ScoringRecord } from './game/scoring.ts'
 import type { PlayerStrategy } from './game/strategy.ts'
 import type { BoardState, PlayerColor, Rotation } from './tiles'
+import type { Position } from './game/position.ts'
 
+export type TurnPhase = 'place' | 'meeple'
+// Presentation projection; match lifecycle belongs to MatchState.
 export type GamePhase = 'configure' | 'place' | 'meeple' | 'finished'
 
 export interface Player {
@@ -31,21 +34,23 @@ export interface GameState {
   currentPlayerIndex: number
   startingPlayerIndex: number
   round: number
-  phase: GamePhase
+  phase: TurnPhase
   board: BoardState
   model: GameBoard
   mesh: StructureMesh
-  previousBoard: GameBoard | null
+  previousBoard: BoardState | null
   message: string
   scoring: readonly ScoringRecord[]
-  winners: readonly string[]
+  winners: readonly Player[]
+  tieBreakReserves: Readonly<Record<string, number>> | null
   rotation: Rotation
   deck: readonly TileInstance[]
   discarded: readonly TileInstance[]
-  seed: number | null
+  seed: number
   deckIndex: number
-  pendingPosition: string | null
-  activity: readonly GameEvent[]
+  pendingPosition: Position | null
+  activity: string
+  events: readonly GameEvent[]
 }
 
 export const playerColors: readonly PlayerColor[] = Object.freeze(['blue', 'red', 'yellow', 'black', 'green'])
@@ -65,3 +70,5 @@ export const playerAvatarInk: Record<PlayerColor, string> = {
   black: '#f8f4e8',
   green: '#f8f4e8',
 }
+
+export type Jogador = Player

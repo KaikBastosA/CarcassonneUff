@@ -1,3 +1,4 @@
+import type { Player } from '../game.ts'
 import type { Follower, FollowerRole } from './followers.ts'
 import type { Position } from './position.ts'
 import type { Terrain, TileRegion } from './tiles.ts'
@@ -17,6 +18,8 @@ export interface StructureData {
   readonly surroundingCount: number
   readonly adjacentCityIds: readonly string[]
   readonly completedCityCount: number
+  readonly completedCityIds?: readonly string[]
+  readonly players?: readonly Player[]
 }
 
 export abstract class Structure {
@@ -27,9 +30,11 @@ export abstract class Structure {
   readonly regions: readonly StructureRegion[]
   readonly followers: readonly Follower[]
   readonly tileIds: readonly string[]
+  #players: readonly Player[]
 
   constructor(data: StructureData) {
     this.id = data.id
+    this.#players = Object.freeze([...(data.players ?? [])])
     this.regions = Object.freeze([...data.regions])
     this.followers = Object.freeze([...data.followers])
     this.tileIds = Object.freeze([...new Set(data.regions.map(({ tileId }) => tileId))])
@@ -39,7 +44,16 @@ export abstract class Structure {
     return this.followers.length === 0
   }
 
-  majority(): readonly string[] {
+  validarOcupacao(): boolean { return this.canOccupy() }
+  determinarMaioria(): readonly Player[] { return this.majority() }
+  pontuar(final: boolean): number { return this.score(final) }
+
+  majority(): readonly Player[] {
+    const ids = this.majorityIds()
+    return ids.map((id) => this.#players.find((player) => player.id === id)).filter((player): player is Player => player !== undefined)
+  }
+
+  majorityIds(): readonly string[] {
     const counts = new Map<string, number>()
     for (const follower of this.followers) counts.set(follower.ownerId, (counts.get(follower.ownerId) ?? 0) + 1)
     const maximum = Math.max(0, ...counts.values())
@@ -58,6 +72,8 @@ export abstract class CompletableStructure extends Structure {
   get isComplete(): boolean {
     return this.openEdges === 0
   }
+
+  verificarConclusao(): boolean { return this.isComplete }
 }
 
 export class City extends CompletableStructure {
@@ -68,7 +84,9 @@ export class City extends CompletableStructure {
     return this.regions.reduce((total, { region }) => total + region.shields, 0)
   }
 
-  score(final: boolean): number {
+  score(final: boolean): number { return this.calcularPontosCidade(final) }
+
+  calcularPontosCidade(final = true): number {
     const multiplier = this.isComplete ? 2 : final ? 1 : 0
     return multiplier * (this.tileIds.length + this.shields)
   }
@@ -78,7 +96,9 @@ export class Road extends CompletableStructure {
   readonly terrain = 'road'
   readonly role = 'thief'
 
-  score(final: boolean): number {
+  score(final: boolean): number { return this.calcularPontosEstrada(final) }
+
+  calcularPontosEstrada(final = true): number {
     return this.isComplete || final ? this.tileIds.length : 0
   }
 }
@@ -97,7 +117,9 @@ export class Monastery extends CompletableStructure {
     return this.surroundingCount === 8
   }
 
-  score(final: boolean): number {
+  score(final: boolean): number { return this.calcularPontosMonasterio(final) }
+
+  calcularPontosMonasterio(final = true): number {
     return this.isComplete || final ? 1 + this.surroundingCount : 0
   }
 }
@@ -106,15 +128,21 @@ export class Field extends Structure {
   readonly terrain = 'field'
   readonly role = 'farmer'
   readonly adjacentCityIds: readonly string[]
-  readonly completedCityCount: number
+  #completedCityIds: readonly string[]
 
   constructor(data: StructureData) {
     super(data)
     this.adjacentCityIds = Object.freeze([...data.adjacentCityIds])
-    this.completedCityCount = data.completedCityCount
+    this.#completedCityIds = Object.freeze([...(data.completedCityIds ?? data.adjacentCityIds.slice(0, data.completedCityCount))])
   }
 
-  score(final: boolean): number {
+  get completedCityCount(): number {
+    return this.adjacentCityIds.filter((id) => this.#completedCityIds.includes(id)).length
+  }
+
+  score(final: boolean): number { return this.calcularPontosCampo(final) }
+
+  calcularPontosCampo(final = true): number {
     return final ? 3 * this.completedCityCount : 0
   }
 }
