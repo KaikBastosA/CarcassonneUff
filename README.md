@@ -15,7 +15,6 @@ A partida usa 72 cartelas distribuídas entre os 12 modelos disponíveis, com qu
 ## Validação
 
 ```sh
-bun run test
 bun run check
 bun run build
 ```

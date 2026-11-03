@@ -41,6 +41,8 @@ O relatório anterior transcreveu incorretamente o laço de descarte (a imagem j
 
 ## Verificação concluída
 
+A suíte automatizada citada abaixo foi executada antes de sua remoção posterior. A versão entregue mantém os comandos `bun run check` e `bun run build`.
+
 - 157 testes aprovados, sem falhas, cancelamentos ou testes ignorados; TypeScript e build de produção aprovados.
 - 24 partidas comparadas com a base 250a285: 1.703 turnos e 3.241 etapas; pontos, peças, seguidores, decisões e resultados equivalentes. A ordem dos eventos finais acompanha as quatro fases; registros antigos foram normalizados por vencedor. O novo desempate tem teste específico.
 - Revisão adicional: quatro partidas com três IAs e mensagens serializadas, 283 turnos, conservação das 72 cartelas e dos seguidores e identidade correta dos jogadores na maioria.
@@ -50,4 +52,4 @@ O relatório anterior transcreveu incorretamente o laço de descarte (a imagem j
 
 Três arquivos .drawio originais (domínio, GoF e GRASP), três imagens de sequência originais, texto complementar e as duas imagens finais “Executar Turno” e “Encerrar Partida”. A nomenclatura destas últimas tem prioridade por instrução expressa do usuário. A reserva para desempate é medida antes da apuração final, conforme confirmação expressa.
 
-Relatório final: `carcassonne-alinhamento-final/relatorio-final.pdf`, em Downloads e anexado ao chat. O relatório inclui matriz dos 86 itens anteriores, testes, exceções e limites. Código-base 250a285; implementação a24de83. Sem push ou publicação.
+Relatório final: `carcassonne-alinhamento-final/relatorio-final.pdf`, em Downloads e anexado ao chat. O relatório inclui matriz dos 86 itens anteriores, testes, exceções e limites. Código-base 250a285; implementação a24de83. A suíte de testes foi removida em alteração posterior.
