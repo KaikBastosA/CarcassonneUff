@@ -52,10 +52,6 @@ body {
 }
 
 .board-stage {
-  --safe-top: 92px;
-  --safe-bottom: 92px;
-  --safe-left: 292px;
-  --safe-right: 342px;
   position: fixed;
   inset: 0;
   z-index: 0;
@@ -259,13 +255,6 @@ body {
     padding: 14px;
   }
 
-  .board-stage {
-    --safe-top: 190px;
-    --safe-bottom: 400px;
-    --safe-left: 16px;
-    --safe-right: 16px;
-  }
-
   .board-controls {
     top: 38%;
     right: 12px;
@@ -326,13 +315,6 @@ body {
     left: 8px;
     max-height: 47dvh;
     padding: 12px;
-  }
-
-  .board-stage {
-    --safe-top: 176px;
-    --safe-bottom: 420px;
-    --safe-left: 12px;
-    --safe-right: 12px;
   }
 
   .board-controls {
@@ -711,3 +693,123 @@ body {
 }
 
 .tile-shield { position: absolute; width: 22%; height: 22%; pointer-events: none; filter: drop-shadow(0 1px 1px #0008); user-select: none; }
+
+/* ---------- Jogo no celular: painel de jogada compacto ----------
+   O tabuleiro precisa da tela. O painel da jogada passa a ser uma barra curta:
+   cabeçalho + peça atual com rotação + instrução. Conteúdo secundário (passos,
+   legenda e pilha) sai de cena no celular. */
+
+@media (max-width: 720px) {
+  .game-header {
+    top: 6px;
+    height: 46px;
+    min-height: 46px;
+    padding: 0 8px;
+  }
+
+  .wordmark { font-size: 17px; }
+  .new-game-button { padding: 6px 8px; font-size: 10.5px; }
+
+  .ledger {
+    top: 58px;
+    padding: 6px;
+  }
+
+  .ledger-head { display: none; }
+  .ledger .player-row { padding: 5px 8px; }
+  .ledger .avatar { width: 22px; height: 22px; font-size: 9px; }
+  .ledger .player-name { font-size: 11px; }
+  .ledger .player-score .score { font-size: 12px; }
+
+  .turn {
+    gap: 7px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    max-height: 54dvh;
+  }
+
+  .turn-head { gap: 8px; }
+  .turn-kicker { font-size: 9.5px; }
+  .turn-title { margin-top: 1px; font-size: 15px; line-height: 1.15; }
+  .turn-player-dot { width: 8px; height: 8px; margin-top: 5px; }
+
+  .tile-tray { padding: 7px; gap: 10px; }
+  .tile-frame { width: 54px; padding: 3px; border-radius: 6px; }
+  .tile-details {
+    flex: 1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .tile-kicker { margin-bottom: 1px; font-size: 9px; }
+  .tile-name { font-size: 11.5px; }
+  .rotation-row { gap: 4px; }
+  .icon-button { width: 28px; height: 28px; }
+  .rotation-value { margin-left: 0; font-size: 9px; }
+
+  .steps,
+  .board-legend,
+  .deck-row { display: none; }
+
+  .turn-instruction { font-size: 10px; line-height: 1.4; }
+  .turn-actions { gap: 6px; }
+  .turn .button { min-height: 34px; font-size: 11px; }
+  .turn .button.primary { min-height: 40px; }
+  .turn .meeple-button { min-height: 36px; }
+  .region-choice { padding: 6px 8px; font-size: 10px; }
+
+  .board-controls { top: 44%; }
+}
+
+/* Celular deitado: o painel vira coluna à direita e o placar fica numa faixa fina. */
+@media (max-height: 560px) and (max-width: 1100px) {
+  .game-header {
+    top: 6px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0 10px;
+  }
+
+  .wordmark { font-size: 16px; }
+
+  .ledger {
+    top: 56px;
+    right: calc(min(300px, 42vw) + 16px);
+    padding: 6px 8px;
+  }
+
+  .ledger-head { display: none; }
+  .ledger .player-row { padding: 4px 8px; }
+  .ledger .avatar { width: 22px; height: 22px; font-size: 9px; }
+
+  .turn {
+    top: 56px;
+    right: 8px;
+    bottom: 8px;
+    left: auto;
+    width: min(300px, 42vw);
+    max-height: none;
+    gap: 7px;
+    padding: 10px;
+  }
+
+  .turn-title { font-size: 16px; }
+  .tile-tray { padding: 7px; gap: 10px; }
+  .tile-frame { width: 54px; }
+  .icon-button { width: 28px; height: 28px; }
+
+  .steps,
+  .board-legend,
+  .deck-row { display: none; }
+
+  .turn-instruction { font-size: 10px; line-height: 1.4; }
+  .turn .button { min-height: 34px; font-size: 11px; }
+  .turn .button.primary { min-height: 40px; }
+
+  .board-controls {
+    top: 40%;
+    right: auto;
+    left: 8px;
+  }
+}

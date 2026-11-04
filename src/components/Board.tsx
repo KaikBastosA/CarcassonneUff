@@ -37,16 +37,76 @@ interface Drag {
   moved: boolean
 }
 
+interface Insets {
+  top: number
+  bottom: number
+  left: number
+  right: number
+}
+
 const BASE_CELL = 96
 const SPRITE_SIZE = 268
 const SPRITE_FEATHER = (2 / 100) * SPRITE_SIZE
 const MIN_ZOOM = 0.35
 const MAX_ZOOM = 2.6
 const FIT_MAX_ZOOM = 1.2
+const FIT_MAX_ZOOM_MOBILE = 1.7
 const MOVE_THRESHOLD = 4
+const SAFE_GUTTER = 8
+const MIN_SAFE = 160
+const SAFE_TARGETS = ['.game-header', '.ledger', '.turn'] as const
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
+}
+
+// A área visível do tabuleiro é o que sobra dos painéis sobrepostos. Medir é mais
+// confiável do que manter faixas fixas no CSS: o painel da jogada muda de altura
+// entre as fases e entre retrato/paisagem.
+function measureSafeInsets(): Insets {
+  const viewportWidth = window.innerWidth
+  const viewportHeight = window.innerHeight
+  const insets: Insets = { top: 0, bottom: 0, left: 0, right: 0 }
+
+  const reserve = (element: Element | null) => {
+    if (!(element instanceof HTMLElement)) return
+    const rect = element.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return
+    if (rect.width >= viewportWidth * 0.6) {
+      if (rect.top + rect.height / 2 <= viewportHeight / 2) {
+        insets.top = Math.max(insets.top, rect.bottom)
+      } else {
+        insets.bottom = Math.max(insets.bottom, viewportHeight - rect.top)
+      }
+      return
+    }
+    if (rect.left + rect.width / 2 >= viewportWidth / 2) {
+      insets.right = Math.max(insets.right, viewportWidth - rect.left)
+    } else {
+      insets.left = Math.max(insets.left, rect.left + rect.width)
+    }
+  }
+
+  for (const selector of SAFE_TARGETS) reserve(document.querySelector(selector))
+
+  const controls = document.querySelector('.board-controls')
+  if (controls instanceof HTMLElement) {
+    const rect = controls.getBoundingClientRect()
+    if (rect.width >= rect.height) {
+      insets.bottom = Math.max(insets.bottom, viewportHeight - rect.top)
+    } else if (rect.left + rect.width / 2 >= viewportWidth / 2) {
+      insets.right = Math.max(insets.right, viewportWidth - rect.left)
+    } else {
+      insets.left = Math.max(insets.left, rect.left + rect.width)
+    }
+  }
+
+  return {
+    top: insets.top ? insets.top + SAFE_GUTTER : 0,
+    bottom: insets.bottom ? insets.bottom + SAFE_GUTTER : 0,
+    left: insets.left ? insets.left + SAFE_GUTTER : 0,
+    right: insets.right ? insets.right + SAFE_GUTTER : 0,
+  }
 }
 
 export default function Board({
@@ -70,6 +130,7 @@ export default function Board({
   const tilesRef = useRef(tiles)
   const drag = useRef<Drag | null>(null)
   const didFit = useRef(false)
+  const safeCenter = useRef<{ x: number; y: number } | null>(null)
   const [camera, setCamera] = useState<Camera>({ x: 0, y: 0, zoom: 1 })
   const [viewport, setViewport] = useState({ width: 0, height: 0 })
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null)
@@ -99,22 +160,23 @@ export default function Board({
     }
   }
 
+  function safeBox(stage: HTMLDivElement) {
+    const insets = measureSafeInsets()
+    const safeWidth = Math.max(MIN_SAFE, stage.clientWidth - insets.left - insets.right)
+    const safeHeight = Math.max(MIN_SAFE, stage.clientHeight - insets.top - insets.bottom)
+    return {
+      safeWidth,
+      safeHeight,
+      centerX: insets.left + safeWidth / 2,
+      centerY: insets.top + safeHeight / 2,
+    }
+  }
+
   function fitView() {
     const stage = stageRef.current
     if (!stage) return
-    const style = getComputedStyle(stage)
-    const read = (name: string) => {
-      const value = parseFloat(style.getPropertyValue(name))
-      return Number.isFinite(value) ? value : 0
-    }
-    const safeLeft = read('--safe-left')
-    const safeRight = read('--safe-right')
-    const safeTop = read('--safe-top')
-    const safeBottom = read('--safe-bottom')
-    const width = stage.clientWidth
-    const height = stage.clientHeight
-    const safeWidth = Math.max(120, width - safeLeft - safeRight)
-    const safeHeight = Math.max(120, height - safeTop - safeBottom)
+    const { safeWidth, safeHeight, centerX, centerY } = safeBox(stage)
+    safeCenter.current = { x: centerX, y: centerY }
     const cells = Object.keys(tilesRef.current).map((key) => key.split(',').map(Number))
     const minX = cells.length ? Math.min(...cells.map(([x]) => x)) : -1
     const maxX = cells.length ? Math.max(...cells.map(([x]) => x)) : 1
@@ -125,15 +187,39 @@ export default function Board({
     const zoom = clamp(
       Math.min(safeWidth / (cellsW * BASE_CELL), safeHeight / (cellsH * BASE_CELL)),
       MIN_ZOOM,
-      FIT_MAX_ZOOM,
+      window.innerWidth <= 720 ? FIT_MAX_ZOOM_MOBILE : FIT_MAX_ZOOM,
     )
-    const centerX = safeLeft + safeWidth / 2
-    const centerY = safeTop + safeHeight / 2
     applyCamera({
       zoom,
       x: centerX - (minX + cellsW / 2) * BASE_CELL * zoom,
       y: centerY - (minY + cellsH / 2) * BASE_CELL * zoom,
     })
+  }
+
+  // Reenquadrar o tabuleiro a cada mudança de altura do painel seria um solavanco no
+  // zoom do jogador. Aqui só deslocamos a câmera para o centro da nova área visível.
+  function relayout() {
+    const stage = stageRef.current
+    if (!stage) return
+    setViewport((current) => (
+      current.width === stage.clientWidth && current.height === stage.clientHeight
+        ? current
+        : { width: stage.clientWidth, height: stage.clientHeight }
+    ))
+    if (!didFit.current) {
+      didFit.current = true
+      fitView()
+      return
+    }
+    const { centerX, centerY } = safeBox(stage)
+    const previous = safeCenter.current
+    safeCenter.current = { x: centerX, y: centerY }
+    if (!previous) return
+    const dx = centerX - previous.x
+    const dy = centerY - previous.y
+    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return
+    const current = cameraRef.current
+    applyCamera({ zoom: current.zoom, x: current.x + dx, y: current.y + dy })
   }
 
   function zoomBy(factor: number) {
@@ -156,19 +242,23 @@ export default function Board({
     const stage = stageRef.current
     if (!stage) return
 
-    const update = () => {
-      setViewport({ width: stage.clientWidth, height: stage.clientHeight })
-      if (!didFit.current) {
-        didFit.current = true
-        fitView()
-      }
-    }
-
-    update()
-    const observer = new ResizeObserver(update)
+    const observer = new ResizeObserver(() => relayout())
     observer.observe(stage)
+    for (const selector of SAFE_TARGETS) {
+      const panel = document.querySelector(selector)
+      if (panel) observer.observe(panel)
+    }
+    const controls = document.querySelector('.board-controls')
+    if (controls) observer.observe(controls)
     return () => observer.disconnect()
   }, [])
+
+  // O painel da jogada muda de altura ao trocar de fase. Medir aqui (antes do paint)
+  // evita o frame em que o tabuleiro fica atrás do painel esperando o ResizeObserver.
+  useLayoutEffect(() => {
+    if (drag.current) return
+    relayout()
+  })
 
   useEffect(() => {
     const sources = new Set<string>()
